@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 
 from flask_login import UserMixin
@@ -27,6 +28,7 @@ class TimelineEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(160), nullable=False)
     body = db.Column(db.Text, nullable=True)
+    files_json = db.Column(db.Text, default="[]", nullable=False)
     occurred_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
     order_index = db.Column(db.Float, default=0, nullable=False)
     manual_order = db.Column(db.Boolean, default=False, nullable=False)
@@ -36,10 +38,15 @@ class TimelineEvent(db.Model):
     user = db.relationship("User")
 
     def to_dict(self):
+        try:
+            files = json.loads(self.files_json) if self.files_json else []
+        except:
+            files = []
         return {
             "id": self.id,
             "title": self.title,
             "body": self.body or "",
+            "files": files,
             "occurred_at": self.occurred_at.isoformat(),
             "order_index": self.order_index,
             "manual_order": self.manual_order,
@@ -54,6 +61,7 @@ class GraphNode(db.Model):
     title = db.Column(db.String(120), nullable=False)
     caption = db.Column(db.String(280), nullable=True)
     notes = db.Column(db.Text, nullable=True)
+    files_json = db.Column(db.Text, default="[]", nullable=False)
     order_index = db.Column(db.Float, default=0, nullable=False)
     color = db.Column(db.String(20), nullable=True)
     in_graph = db.Column(db.Boolean, default=True, nullable=False)
@@ -67,12 +75,17 @@ class GraphNode(db.Model):
     parent = db.relationship("GraphNode", remote_side=[id], backref="children")
 
     def to_dict(self):
+        try:
+            files = json.loads(self.files_json) if self.files_json else []
+        except:
+            files = []
         return {
             "id": self.id,
             "parent_id": self.parent_id,
             "title": self.title,
             "caption": self.caption or "",
             "notes": self.notes or "",
+            "files": files,
             "order_index": self.order_index,
             "color": self.color or "",
             "in_graph": self.in_graph,

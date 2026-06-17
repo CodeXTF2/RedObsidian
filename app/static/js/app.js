@@ -73,12 +73,12 @@ function nodePath(node) {
 }
 
 function inlineMarkdown(value) {
-  return escapeHtml(value)
-    .replace(/(!\[([^\]]*)\]\((https?:\/\/[^)\s]+|[\w/.-]+\.\w+)\))/g, '<span class="md-img"><span class="md-img-syntax">$1</span><img src="$3" alt="$2"></span>')
+  const escaped = escapeHtml(value);
+  return escaped
+    .replace(/(!\[([^\]]*)\]\((https?:\/\/[^)\s]+|[\w/.-]+\.\w+)\))/g, '<span class="md-img"><span class="md-img-syntax" contenteditable="false">$1</span><img src="$3" alt="$2"></span>')
     .replace(/(`[^`]+`)/g, "<code>$1</code>")
     .replace(/(\*\*([^*]+)\*\*)/g, "<strong>$1</strong>")
-    .replace(/(\*[^*]+\*)/g, "<em>$1</em>")
-    .replace(/(\[[^\]]+\]\((https?:\/\/[^)\s]+)\))/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+    .replace(/(\*[^*]+\*)/g, "<em>$1</em>");
 }
 
 function markdownToLiveHtml(markdown) {
@@ -263,6 +263,8 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
   const breadcrumb = document.querySelector("#breadcrumb");
   let lastLoadedNodeId = null;
 
+  const nodeFilesBlock = document.querySelector("#node-files");
+
   function renderEditor() {
     const node = currentNode();
     if (!node) {
@@ -287,6 +289,24 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
     if (isNewSelection || document.activeElement !== caption) caption.value = node.caption || "";
     if (isNewSelection || document.activeElement !== notes) setEditorMarkdown(notes, node.notes || "");
     
+    if (nodeFilesBlock) {
+      nodeFilesBlock.innerHTML = (node.files || []).map((file, i) => `
+        <div class="attached-file">
+          <span class="file-icon-small">📄</span>
+          <a href="${file.url}" target="_blank" rel="noreferrer">${escapeHtml(file.name)}</a>
+          <button type="button" class="delete-attached" data-file-index="${i}">&times;</button>
+        </div>
+      `).join("");
+      
+      nodeFilesBlock.querySelectorAll(".delete-attached").forEach(btn => {
+        btn.addEventListener("click", () => {
+          node.files.splice(Number(btn.dataset.fileIndex), 1);
+          renderEditor();
+          socket.emit("node:update", { id: node.id, files: node.files });
+        });
+      });
+    }
+
     if (colorPicker) {
       colorPicker.querySelectorAll(".color-swatch").forEach((swatch) => {
         swatch.classList.toggle("active", (swatch.dataset.color || "") === (node.color || ""));
@@ -332,6 +352,19 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
   window.cancelPendingSave = () => save.cancel();
   window.flushPendingSave = flush;
 
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest(".live-markdown-editor a");
+    if (!link) return;
+
+    // Standard behavior: single click opens link
+    // "Alt" key behavior: hold Alt to ignore link and edit its text/markdown
+    if (!event.altKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      window.open(link.href, "_blank", "noreferrer");
+    }
+  });
+
   [title, caption, notes].forEach((input) => {
     input?.addEventListener("input", () => {
       if (input === notes) setEditorMarkdown(notes, editorText(notes), true);
@@ -346,11 +379,7 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
       const response = await fetch("/api/upload", { method: "POST", body: formData });
       const payload = await response.json();
       if (payload.url) {
-        if (file.type.startsWith("image/")) {
-          return `![${file.name}](${payload.url})`;
-        } else {
-          return `[Download ${file.name}](${payload.url})`;
-        }
+        return { url: payload.url, name: file.name, isImage: file.type.startsWith("image/") };
       }
     } catch (err) {
       showToast("Upload failed");
@@ -385,8 +414,21 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
       if (item.kind === "file") {
         event.preventDefault();
         const file = item.getAsFile();
-        const md = await uploadFile(file);
-        if (md) insertTextAtCaret(notes, md);
+        const result = await uploadFile(file);
+        if (result) {
+          if (result.isImage) {
+            insertTextAtCaret(notes, `![${result.name}](${result.url})`);
+          } else {
+            if (typeof window.flushPendingSave === "function") window.flushPendingSave();
+            const node = currentNode();
+            if (node) {
+              node.files = node.files || [];
+              node.files.push({ name: result.name, url: result.url });
+              renderEditor();
+              socket.emit("node:update", { id: node.id, files: node.files });
+            }
+          }
+        }
       }
     }
   });
@@ -396,8 +438,21 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
     if (files && files.length) {
       event.preventDefault();
       for (const file of files) {
-        const md = await uploadFile(file);
-        if (md) insertTextAtCaret(notes, md);
+        const result = await uploadFile(file);
+        if (result) {
+          if (result.isImage) {
+            insertTextAtCaret(notes, `![${result.name}](${result.url})`);
+          } else {
+            if (typeof window.flushPendingSave === "function") window.flushPendingSave();
+            const node = currentNode();
+            if (node) {
+              node.files = node.files || [];
+              node.files.push({ name: result.name, url: result.url });
+              renderEditor();
+              socket.emit("node:update", { id: node.id, files: node.files });
+            }
+          }
+        }
       }
     }
   });
@@ -665,7 +720,6 @@ function initTimelinePage() {
               <input class="timeline-time-input" type="datetime-local" data-event-time="${event.id}" value="${toLocalInputValue(event.occurred_at)}">
               <button type="button" class="ghost-button" data-event-now="${event.id}" title="Set to now">Now</button>
             </div>
-            <span class="timeline-meta">${escapeHtml(event.author)}${event.manual_order ? " / manual" : ""}</span>
             <button type="button" data-event-save="${event.id}">Save</button>
           </div>
         </div>
@@ -833,7 +887,14 @@ function initGraphPage() {
     const node = currentNode();
     graphNodePanel.hidden = !node;
     document.querySelector(".graph-layout")?.classList.toggle("panel-open", !!node);
-    if (node) renderEditor();
+    
+    // Clear previous color classes
+    graphNodePanel.classList.remove("color-red", "color-orange", "color-yellow", "color-green", "color-blue", "color-pink");
+    
+    if (node) {
+      if (node.color) graphNodePanel.classList.add(`color-${node.color}`);
+      renderEditor();
+    }
   }
 
   function renderZoom() {

@@ -1,3 +1,4 @@
+import json
 from flask_login import current_user
 from flask_socketio import disconnect, emit
 from sqlalchemy.exc import IntegrityError
@@ -66,6 +67,7 @@ def register_socket_handlers(socketio):
         event = TimelineEvent(
             title=title[:160],
             body=body,
+            files_json=json.dumps((payload or {}).get("files", [])),
             occurred_at=parse_iso_datetime((payload or {}).get("occurred_at")),
             user_id=current_user.id,
         )
@@ -93,6 +95,8 @@ def register_socket_handlers(socketio):
             event.title = title[:160]
         if "body" in payload:
             event.body = (payload.get("body") or "").strip()
+        if "files" in payload:
+            event.files_json = json.dumps(payload.get("files", []))
         if "occurred_at" in payload:
             event.occurred_at = parse_iso_datetime(payload.get("occurred_at"))
 
@@ -134,6 +138,7 @@ def register_socket_handlers(socketio):
             parent_id=int(parent_id) if parent_id else None,
             caption=((payload or {}).get("caption", "").strip())[:280],
             color=((payload or {}).get("color", "").strip())[:20],
+            files_json=json.dumps((payload or {}).get("files", [])),
             in_graph=bool((payload or {}).get("in_graph", True)),
             order_index=float((payload or {}).get("order_index", 0)),
             x=float((payload or {}).get("x", 360)),
@@ -161,6 +166,9 @@ def register_socket_handlers(socketio):
                 if field not in ("notes", "color"):
                     value = value.strip()
                 setattr(node, field, value[:limit] if limit else value)
+
+        if "files" in payload:
+            node.files_json = json.dumps(payload.get("files", []))
 
         if "in_graph" in payload:
             node.in_graph = bool(payload["in_graph"])

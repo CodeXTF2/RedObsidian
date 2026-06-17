@@ -61,6 +61,9 @@ def ensure_schema():
     if "order_index" not in graph_node_columns:
         db.session.execute(text("ALTER TABLE graph_node ADD COLUMN order_index FLOAT DEFAULT 0 NOT NULL"))
         db.session.commit()
+    if "files_json" not in graph_node_columns:
+        db.session.execute(text("ALTER TABLE graph_node ADD COLUMN files_json TEXT DEFAULT '[]' NOT NULL"))
+        db.session.commit()
 
     timeline_columns = {column["name"] for column in inspector.get_columns("timeline_event")}
     if "order_index" not in timeline_columns:
@@ -69,4 +72,7 @@ def ensure_schema():
         db.session.commit()
     if "manual_order" not in timeline_columns:
         db.session.execute(text("ALTER TABLE timeline_event ADD COLUMN manual_order BOOLEAN DEFAULT 0 NOT NULL"))
+        db.session.commit()
+    if "files_json" not in timeline_columns:
+        db.session.execute(text("ALTER TABLE timeline_event ADD COLUMN files_json TEXT DEFAULT '[]' NOT NULL"))
         db.session.commit()

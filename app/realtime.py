@@ -119,6 +119,26 @@ def register_socket_handlers(socketio):
         db.session.commit()
         emit("timeline:updated", event.to_dict(), broadcast=True)
 
+    @socketio.on("timeline:delete")
+    def delete_timeline_event(payload):
+        if not current_user.is_authenticated:
+            disconnect()
+            return
+
+        event_id = (payload or {}).get("id")
+        event = db.session.get(TimelineEvent, event_id)
+        if not event:
+            emit("error:message", {"message": f"Timeline event {event_id} not found."})
+            return
+
+        try:
+            db.session.delete(event)
+            db.session.commit()
+            emit("timeline:deleted", {"id": event_id}, broadcast=True)
+        except Exception as e:
+            db.session.rollback()
+            emit("error:message", {"message": f"Deletion failed: {str(e)}"})
+
     @socketio.on("node:create")
     def create_node(payload):
         if not current_user.is_authenticated:

@@ -545,6 +545,27 @@ function initNotesPage() {
     });
     nodeList.querySelectorAll(".tree-row").forEach((row) => attachTreeDragHandlers(row, nodeList));
 
+    // Allow dropping to the very bottom to make a root node
+    nodeList.addEventListener("dragover", (event) => {
+      // Only handle drops on the container itself, not on the rows
+      if (event.target.closest(".tree-row")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      nodeList.classList.add("drop-root");
+    });
+    nodeList.addEventListener("dragleave", (event) => {
+      if (event.target.closest(".tree-row")) return;
+      nodeList.classList.remove("drop-root");
+    });
+    nodeList.addEventListener("drop", (event) => {
+      nodeList.classList.remove("drop-root");
+      if (event.target.closest(".tree-row")) return; // Handled by row listener
+      event.preventDefault();
+      const draggedId = Number(event.dataTransfer.getData("text/plain"));
+      if (!draggedId) return;
+      socket.emit("node:update", { id: draggedId, parent_id: null, order_index: nextOrderIndex(null) });
+    });
+
     const node = currentNode();
     editor.hidden = !node;
     emptyEditor.hidden = !!node;
@@ -720,6 +741,7 @@ function initTimelinePage() {
               <input class="timeline-time-input" type="datetime-local" data-event-time="${event.id}" value="${toLocalInputValue(event.occurred_at)}">
               <button type="button" class="ghost-button" data-event-now="${event.id}" title="Set to now">Now</button>
             </div>
+            <button type="button" class="ghost-button danger" data-event-delete="${event.id}">Delete</button>
             <button type="button" data-event-save="${event.id}">Save</button>
           </div>
         </div>
@@ -750,6 +772,15 @@ function initTimelinePage() {
           body: editorText(editor),
           occurred_at: new Date(timelineList.querySelector(`[data-event-time="${id}"]`).value).toISOString(),
         });
+      });
+    });
+
+    timelineList.querySelectorAll("[data-event-delete]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const id = Number(button.dataset.eventDelete);
+        if (confirm("Are you sure you want to delete this timeline event?")) {
+          socket.emit("timeline:delete", { id });
+        }
       });
     });
 
@@ -1309,6 +1340,11 @@ socket.on("timeline:created", (event) => {
 
 socket.on("timeline:updated", (event) => {
   upsert(state.events, event);
+  renderCurrentPage();
+});
+
+socket.on("timeline:deleted", (payload) => {
+  state.events = state.events.filter(e => e.id !== payload.id);
   renderCurrentPage();
 });
 

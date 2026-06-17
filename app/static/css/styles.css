@@ -144,9 +144,19 @@ a {
 }
 
 .brand {
-  color: var(--text-strong);
-  font-size: 0.86rem;
-  font-weight: 800;
+  background: linear-gradient(135deg, #ffffff 40%, #ff7b72 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent;
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.brand-large {
+  font-size: 2.2rem;
+  margin: 0 0 1.5rem;
 }
 
 .main-nav {
@@ -229,8 +239,15 @@ a {
 
 .node-list {
   color: var(--muted);
-  max-height: calc(100vh - 92px);
-  overflow: auto;
+  height: calc(100vh - 92px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 60px;
+  transition: background 0.15s ease;
+}
+
+.node-list.drop-root {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .tree-row {
@@ -608,8 +625,14 @@ a {
 }
 
 .graph-toolbar button {
-  background: var(--accent-2);
-  color: #061113;
+  background: var(--sidebar-2);
+  border: 1px solid var(--line);
+  color: var(--text-strong);
+}
+
+.graph-toolbar button:hover {
+  background: var(--line-soft);
+  color: #fff;
 }
 
 .graph-canvas {

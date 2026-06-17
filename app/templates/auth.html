@@ -4,8 +4,8 @@
 <main class="auth-shell">
   <section class="auth-panel">
     <div>
-      <p class="eyebrow">Collaborative workspace</p>
-      <h1>{{ "Create account" if mode == "register" else "Sign in" }}</h1>
+      <h1 class="brand brand-large">RedObsidian</h1>
+      <p class="eyebrow">{{ "Create account" if mode == "register" else "Sign in" }}</p>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}

@@ -1,0 +1,26 @@
+{% extends "app_base.html" %}
+
+{% block app_body %}
+<main class="node-page-layout" data-page="node" data-node-id="{{ node_id }}">
+  <section class="document-shell">
+    <form id="node-editor" class="node-editor">
+      <div id="breadcrumb" class="breadcrumb"></div>
+      <input id="node-title" class="title-input" placeholder="Untitled page" maxlength="120">
+      <input id="node-caption" class="caption-input" placeholder="Add a caption" maxlength="280">
+      <div id="node-color-picker" class="color-picker">
+        <button type="button" class="color-swatch" data-color="" title="Default"></button>
+        <button type="button" class="color-swatch color-red" data-color="red" title="Red"></button>
+        <button type="button" class="color-swatch color-orange" data-color="orange" title="Orange"></button>
+        <button type="button" class="color-swatch color-yellow" data-color="yellow" title="Yellow"></button>
+        <button type="button" class="color-swatch color-green" data-color="green" title="Green"></button>
+        <button type="button" class="color-swatch color-blue" data-color="blue" title="Blue"></button>
+        <button type="button" class="color-swatch color-purple" data-color="purple" title="Purple"></button>
+      </div>
+      <div class="graph-actions">
+        <button id="add-to-graph" class="add-to-graph-btn" type="button" hidden>Add to Graph</button>
+      </div>
+      <div id="node-notes" class="live-markdown-editor" contenteditable="true" data-placeholder="Write markdown..."></div>
+    </form>
+  </section>
+</main>
+{% endblock %}

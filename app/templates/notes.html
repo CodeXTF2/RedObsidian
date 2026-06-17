@@ -1,0 +1,40 @@
+{% extends "app_base.html" %}
+
+{% block app_body %}
+<main class="notes-layout" data-page="notes">
+  <aside class="vault-sidebar">
+    <div class="vault-actions">
+      <span>Vault</span>
+      <button id="add-node" class="icon-button" type="button" title="New page">+</button>
+    </div>
+    <div id="node-list" class="node-list"></div>
+  </aside>
+
+  <section class="document-shell">
+    <div class="empty-editor" id="empty-editor">Select a page or create a new one.</div>
+    <form id="node-editor" class="node-editor" hidden>
+      <div id="breadcrumb" class="breadcrumb"></div>
+      <input id="node-title" class="title-input" placeholder="Untitled page" maxlength="120">
+      <input id="node-caption" class="caption-input" placeholder="Add a caption" maxlength="280">
+      <div id="node-color-picker" class="color-picker">
+        <button type="button" class="color-swatch" data-color="" title="Default"></button>
+        <button type="button" class="color-swatch color-red" data-color="red" title="Red"></button>
+        <button type="button" class="color-swatch color-orange" data-color="orange" title="Orange"></button>
+        <button type="button" class="color-swatch color-yellow" data-color="yellow" title="Yellow"></button>
+        <button type="button" class="color-swatch color-green" data-color="green" title="Green"></button>
+        <button type="button" class="color-swatch color-blue" data-color="blue" title="Blue"></button>
+        <button type="button" class="color-swatch color-purple" data-color="purple" title="Purple"></button>
+      </div>
+      <div class="graph-actions">
+        <button id="add-to-graph" class="add-to-graph-btn" type="button" hidden>Add to Graph</button>
+      </div>
+      <div id="node-notes" class="live-markdown-editor" contenteditable="true" data-placeholder="Write markdown..."></div>
+    </form>
+  </section>
+  <div id="notes-context-menu" class="context-menu" hidden>
+    <button type="button" id="menu-new-page">New page</button>
+    <button type="button" id="menu-new-child">New child page</button>
+    <button type="button" id="menu-delete-page" class="danger">Delete page</button>
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "app_base.html" %}
+
+{% block app_body %}
+<main class="timeline-layout" data-page="timeline">
+  <section class="panel timeline-composer">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Timeline</p>
+        <h1>Log event</h1>
+      </div>
+    </div>
+    <form id="timeline-form" class="stack-form">
+      <input id="event-title" placeholder="Event title" maxlength="160" required>
+      <div id="event-body" class="live-markdown-editor timeline-body-editor" contenteditable="true" data-placeholder="Caption or notes (Markdown supported)"></div>
+      <div class="timeline-time-row">
+        <input id="event-time" type="datetime-local" required>
+        <button id="event-time-now" type="button" class="ghost-button">Now</button>
+      </div>
+      <button type="submit">Log event</button>
+    </form>
+  </section>
+
+  <section class="panel timeline-reader">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Events</p>
+        <h1>Timeline</h1>
+      </div>
+    </div>
+    <div id="timeline-list" class="timeline-list timeline-list-full"></div>
+  </section>
+</main>
+{% endblock %}

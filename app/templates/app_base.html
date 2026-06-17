@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('main.notes') }}">RedObsidian</a>
+    <nav class="main-nav" aria-label="Primary">
+      <a class="{{ 'active' if active_page == 'notes' else '' }}" href="{{ url_for('main.notes') }}">Vault</a>
+      <a class="{{ 'active' if active_page == 'graph' else '' }}" href="{{ url_for('main.graph') }}">Graph</a>
+      <a class="{{ 'active' if active_page == 'images' else '' }}" href="{{ url_for('main.images') }}">Images</a>
+      <a class="{{ 'active' if active_page == 'files' else '' }}" href="{{ url_for('main.files_page') }}">Files</a>
+      <a class="{{ 'active' if active_page == 'timeline' else '' }}" href="{{ url_for('main.timeline') }}">Timeline</a>
+    </nav>
+    <form method="post" action="{{ url_for('auth.logout') }}">
+      <button class="ghost-button" type="submit">Logout</button>
+    </form>
+  </header>
+  {% block app_body %}{% endblock %}
+</div>
+<div id="toast" class="toast" hidden></div>
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+{% endblock %}

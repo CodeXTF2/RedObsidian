@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Environments
+.env
+.flaskenv
+
+# Database / Instance
+instance/
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+server-test.err.log
+server-test.out.log
+
+# Gemini / Editor
+.gemini/
+.vscode/
+.idea/
+.DS_Store

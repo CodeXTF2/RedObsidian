@@ -345,6 +345,7 @@ function eventTimeMs(value) {
 }
 
 function toLocalInputValue(value = new Date()) {
+  if (arguments.length > 0 && (value === null || value === "")) return "";
   const date = parseServerDate(value);
   if (Number.isNaN(date.getTime())) return "";
   const offset = date.getTimezoneOffset() * 60000;
@@ -427,9 +428,9 @@ function buildSearchIndex({ images = [], files = [] } = {}) {
     {
       type: "Timeline",
       title: event.title || "Untitled event",
-      detail: `${formatTime(event.occurred_at)} ${resultExcerpt(event.body, "")}`.trim(),
+      detail: `${formatTime(event.occurred_at)}${event.ended_at ? ` to ${formatTime(event.ended_at)}` : ""} ${resultExcerpt(event.body, "")}`.trim(),
       href: `/timeline#timeline-event-${event.id}`,
-      searchText: `${event.title || ""} ${event.body || ""} ${formatTime(event.occurred_at)}`,
+      searchText: `${event.title || ""} ${event.body || ""} ${formatTime(event.occurred_at)} ${event.ended_at ? formatTime(event.ended_at) : ""}`,
     },
     ...attachedFileResults(event.files, event.title || "Untitled event", "Timeline", `/timeline#timeline-event-${event.id}`),
   ]);
@@ -1049,6 +1050,7 @@ function initTimelinePage() {
   const eventTitle = document.querySelector("#event-title");
   const eventBody = document.querySelector("#event-body");
   const eventTime = document.querySelector("#event-time");
+  const eventEndTime = document.querySelector("#event-end-time");
   const eventTimeNow = document.querySelector("#event-time-now");
   const timelineAutoSort = document.querySelector("#timeline-auto-sort");
 
@@ -1081,7 +1083,14 @@ function initTimelinePage() {
           <div id="event-body-${event.id}" class="live-markdown-editor timeline-item-body" contenteditable="true" data-placeholder="Caption or notes" data-event-body="${event.id}">${markdownToLiveHtml(event.body || "")}</div>
           <div class="timeline-row-actions">
             <div class="timeline-time-input-group">
-              <input class="timeline-time-input" type="datetime-local" data-event-time="${event.id}" value="${toLocalInputValue(event.occurred_at)}">
+              <label class="timeline-time-field">
+                <span>Start</span>
+                <input class="timeline-time-input" type="datetime-local" data-event-time="${event.id}" value="${toLocalInputValue(event.occurred_at)}">
+              </label>
+              <label class="timeline-time-field">
+                <span>End</span>
+                <input class="timeline-time-input" type="datetime-local" data-event-end-time="${event.id}" value="${toLocalInputValue(event.ended_at)}">
+              </label>
               <button type="button" class="ghost-button" data-event-now="${event.id}" title="Set to now">Now</button>
             </div>
             <button type="button" class="ghost-button danger" data-event-delete="${event.id}">Delete</button>
@@ -1115,9 +1124,19 @@ function initTimelinePage() {
 
         const editor = timelineList.querySelector(`[data-event-body="${id}"]`);
         const timeValue = timelineList.querySelector(`[data-event-time="${id}"]`).value;
+        const endTimeValue = timelineList.querySelector(`[data-event-end-time="${id}"]`).value;
         const occurredAt = localInputValueToIso(timeValue);
         if (!occurredAt) {
           showToast("Timeline date and time is invalid.");
+          return;
+        }
+        const endedAt = endTimeValue ? localInputValueToIso(endTimeValue) : null;
+        if (endTimeValue && !endedAt) {
+          showToast("Timeline end date and time is invalid.");
+          return;
+        }
+        if (endedAt && new Date(endedAt) < new Date(occurredAt)) {
+          showToast("Timeline end date and time must be after the start.");
           return;
         }
         const titleValue = timelineList.querySelector(`[data-event-title="${id}"]`).value;
@@ -1130,13 +1149,15 @@ function initTimelinePage() {
           title: titleValue,
           body: editorText(editor),
           occurred_at: occurredAt,
+          ended_at: endedAt,
         };
 
         const prevState = {
           id: eventData.id,
           title: eventData.title,
           body: eventData.body,
-          occurred_at: eventData.occurred_at
+          occurred_at: eventData.occurred_at,
+          ended_at: eventData.ended_at || null,
         };
 
         history.push(
@@ -1166,15 +1187,26 @@ function initTimelinePage() {
   timelineForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const timeValue = eventTime.value;
+    const endTimeValue = eventEndTime.value;
     const occurredAt = localInputValueToIso(timeValue);
     if (!occurredAt) {
       showToast("Timeline date and time is invalid.");
+      return;
+    }
+    const endedAt = endTimeValue ? localInputValueToIso(endTimeValue) : null;
+    if (endTimeValue && !endedAt) {
+      showToast("Timeline end date and time is invalid.");
+      return;
+    }
+    if (endedAt && new Date(endedAt) < new Date(occurredAt)) {
+      showToast("Timeline end date and time must be after the start.");
       return;
     }
     socket.emit("timeline:create", {
       title: eventTitle.value,
       body: editorText(eventBody),
       occurred_at: occurredAt,
+      ended_at: endedAt,
     });
     timelineForm.reset();
     eventBody.innerHTML = "";

@@ -121,6 +121,7 @@ def import_project(input_file, password, new_name=None):
                         body=e_data["body"],
                         files_json=json.dumps(e_data["files"]),
                         occurred_at=parse_iso_datetime(e_data["occurred_at"]),
+                        ended_at=parse_iso_datetime(e_data["ended_at"]) if e_data.get("ended_at") else None,
                         order_index=e_data["order_index"],
                         manual_order=e_data["manual_order"],
                         user_id=owner.id

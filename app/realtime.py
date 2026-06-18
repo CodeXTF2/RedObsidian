@@ -60,10 +60,25 @@ def reset_timeline_auto_order(project_id):
 
 
 def parse_timeline_datetime(value):
+    if value in (None, ""):
+        return None
     try:
         return parse_iso_datetime(value)
     except (TypeError, ValueError):
         return None
+
+
+def parse_required_timeline_datetime(value):
+    if not value:
+        return None
+    return parse_timeline_datetime(value)
+
+
+def parse_optional_timeline_datetime(value):
+    if value in (None, ""):
+        return None, True
+    parsed = parse_timeline_datetime(value)
+    return parsed, parsed is not None
 
 
 def register_socket_handlers(socketio):
@@ -86,9 +101,16 @@ def register_socket_handlers(socketio):
         if not title:
             emit("error:message", {"message": "Timeline title is required."})
             return
-        occurred_at = parse_timeline_datetime((payload or {}).get("occurred_at"))
+        occurred_at = parse_required_timeline_datetime((payload or {}).get("occurred_at"))
         if occurred_at is None:
             emit("error:message", {"message": "Timeline date and time is invalid."})
+            return
+        ended_at, valid_ended_at = parse_optional_timeline_datetime((payload or {}).get("ended_at"))
+        if not valid_ended_at:
+            emit("error:message", {"message": "Timeline end date and time is invalid."})
+            return
+        if ended_at and as_utc(ended_at) < as_utc(occurred_at):
+            emit("error:message", {"message": "Timeline end date and time must be after the start."})
             return
 
         event = TimelineEvent(
@@ -97,6 +119,7 @@ def register_socket_handlers(socketio):
             body=body,
             files_json=json.dumps((payload or {}).get("files", [])),
             occurred_at=occurred_at,
+            ended_at=ended_at,
             user_id=current_user.id,
         )
         event.order_index = automatic_timeline_order(event.occurred_at, project_id)
@@ -127,13 +150,22 @@ def register_socket_handlers(socketio):
         if "files" in payload:
             event.files_json = json.dumps(payload.get("files", []))
         if "occurred_at" in payload:
-            occurred_at = parse_timeline_datetime(payload.get("occurred_at"))
+            occurred_at = parse_required_timeline_datetime(payload.get("occurred_at"))
             if occurred_at is None:
                 emit("error:message", {"message": "Timeline date and time is invalid."})
                 return
             event.occurred_at = occurred_at
             if not event.manual_order:
                 event.order_index = automatic_timeline_order(occurred_at, project_id, exclude_id=event.id)
+        if "ended_at" in payload:
+            ended_at, valid_ended_at = parse_optional_timeline_datetime(payload.get("ended_at"))
+            if not valid_ended_at:
+                emit("error:message", {"message": "Timeline end date and time is invalid."})
+                return
+            event.ended_at = ended_at
+        if event.ended_at and as_utc(event.ended_at) < as_utc(event.occurred_at):
+            emit("error:message", {"message": "Timeline end date and time must be after the start."})
+            return
 
         db.session.commit()
         emit("timeline:updated", event.to_dict(), broadcast=True)

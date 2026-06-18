@@ -117,3 +117,6 @@ def ensure_schema():
         if "files_json" not in timeline_columns:
             db.session.execute(text("ALTER TABLE timeline_event ADD COLUMN files_json TEXT DEFAULT '[]' NOT NULL"))
             db.session.commit()
+        if "ended_at" not in timeline_columns:
+            db.session.execute(text("ALTER TABLE timeline_event ADD COLUMN ended_at DATETIME"))
+            db.session.commit()

@@ -60,6 +60,7 @@ class TimelineEvent(db.Model):
     body = db.Column(db.Text, nullable=True)
     files_json = db.Column(db.Text, default="[]", nullable=False)
     occurred_at = db.Column(db.DateTime(timezone=True), nullable=False, index=True)
+    ended_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     order_index = db.Column(db.Float, default=0, nullable=False)
     manual_order = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
@@ -80,6 +81,7 @@ class TimelineEvent(db.Model):
             "body": self.body or "",
             "files": files,
             "occurred_at": isoformat_utc(self.occurred_at),
+            "ended_at": isoformat_utc(self.ended_at) if self.ended_at else None,
             "order_index": self.order_index,
             "manual_order": self.manual_order,
             "created_at": isoformat_utc(self.created_at),

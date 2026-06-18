@@ -1048,7 +1048,20 @@ a {
 .timeline-time-row {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.timeline-time-field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.timeline-time-field span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .timeline-body-editor {
@@ -1078,13 +1091,14 @@ a {
 .timeline-time-input-group {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   margin-right: auto;
 }
 
 .timeline-time-input {
+  min-width: 220px;
   width: auto;
-  min-width: 245px;
 }
 
 .timeline-save-indicator {
@@ -1381,6 +1395,15 @@ a {
 
   .timeline-list-full {
     max-height: 60vh;
+  }
+
+  .timeline-time-row {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-time-input {
+    min-width: 0;
+    width: 100%;
   }
 
   .vault-sidebar {

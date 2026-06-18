@@ -13,7 +13,14 @@
       <input id="event-title" placeholder="Event title" maxlength="160" required>
       <div id="event-body" class="live-markdown-editor timeline-body-editor" contenteditable="true" data-placeholder="Caption or notes (Markdown supported)"></div>
       <div class="timeline-time-row">
-        <input id="event-time" type="datetime-local" required>
+        <label class="timeline-time-field">
+          <span>Start</span>
+          <input id="event-time" type="datetime-local" required>
+        </label>
+        <label class="timeline-time-field">
+          <span>End</span>
+          <input id="event-end-time" type="datetime-local">
+        </label>
         <button id="event-time-now" type="button" class="ghost-button">Now</button>
       </div>
       <button type="submit">Log event</button>

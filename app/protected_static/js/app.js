@@ -1686,7 +1686,7 @@ function initGraphPage() {
     if (done.type === "move") {
       if (done.moved) {
         if (!state.selectedNodeIds.has(done.node.id)) {
-          setGraphSelection(done.moveStart.map((item) => item.id), done.node.id);
+          state.selectedNodeIds = new Set(done.moveStart.map((item) => item.id));
           renderGraph();
         }
         done.moveStart.forEach((start) => {

@@ -12,6 +12,10 @@
       <a class="{{ 'active' if active_page == 'files' else '' }}" href="{{ url_for('main.files_page') }}">Files</a>
       <a class="{{ 'active' if active_page == 'timeline' else '' }}" href="{{ url_for('main.timeline') }}">Timeline</a>
     </nav>
+    <div class="global-search" role="search">
+      <input id="global-search-input" type="search" autocomplete="off" placeholder="Search project..." aria-label="Search project">
+      <div id="global-search-results" class="global-search-results" hidden></div>
+    </div>
     <form method="post" action="{{ url_for('auth.logout') }}">
       <button class="ghost-button" type="submit">Logout</button>
     </form>

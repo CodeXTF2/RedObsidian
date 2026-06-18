@@ -11,6 +11,9 @@ const state = {
   zoom: 1,
 };
 
+const timelineSaveIndicators = new Map();
+const timelineSaveTimers = new Map();
+
 const history = {
   undoStack: [],
   redoStack: [],
@@ -70,6 +73,28 @@ function showToast(message) {
   showToast.timer = setTimeout(() => {
     toast.hidden = true;
   }, 2600);
+}
+
+function setTimelineSaveIndicator(id, status) {
+  const eventId = Number(id);
+  if (!eventId) return;
+  clearTimeout(timelineSaveTimers.get(eventId));
+  timelineSaveTimers.delete(eventId);
+
+  if (!status) {
+    timelineSaveIndicators.delete(eventId);
+  } else {
+    timelineSaveIndicators.set(eventId, status);
+    if (status === "saved") {
+      timelineSaveTimers.set(eventId, setTimeout(() => {
+        timelineSaveIndicators.delete(eventId);
+        timelineSaveTimers.delete(eventId);
+        if (page === "timeline") renderCurrentPage();
+      }, 1800));
+    }
+  }
+
+  if (page === "timeline") renderCurrentPage();
 }
 
 function escapeHtml(value) {
@@ -345,6 +370,143 @@ function localInputValueToIso(value) {
 
 function formatTime(value) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parseServerDate(value));
+}
+
+function resultExcerpt(value, query) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const index = text.toLowerCase().indexOf(query.toLowerCase());
+  const start = Math.max(0, index === -1 ? 0 : index - 36);
+  const excerpt = text.slice(start, start + 110);
+  return `${start > 0 ? "... " : ""}${excerpt}${start + 110 < text.length ? " ..." : ""}`;
+}
+
+function attachedFileResults(files, sourceTitle, sourceType, sourceUrl) {
+  return (files || []).map((file) => ({
+    type: sourceType === "Timeline" ? "Timeline attachment" : "Vault attachment",
+    title: file.name || file.filename || "Attached file",
+    detail: sourceTitle,
+    href: file.url || sourceUrl,
+    searchText: `${file.name || ""} ${file.filename || ""} ${sourceTitle}`,
+  }));
+}
+
+async function loadSearchUploads() {
+  const [images, files] = await Promise.all([
+    fetch("/api/images").then((response) => response.ok ? response.json() : []).catch(() => []),
+    fetch("/api/files").then((response) => response.ok ? response.json() : []).catch(() => []),
+  ]);
+  return { images, files };
+}
+
+function buildSearchIndex({ images = [], files = [] } = {}) {
+  const nodeResults = state.nodes.flatMap((node) => [
+    {
+      type: "Vault",
+      title: node.title || "Untitled page",
+      detail: node.caption || resultExcerpt(node.notes, ""),
+      href: `/nodes/${node.id}`,
+      searchText: `${node.title || ""} ${node.caption || ""} ${node.notes || ""}`,
+    },
+    ...attachedFileResults(node.files, node.title || "Untitled page", "Vault", `/nodes/${node.id}`),
+  ]);
+
+  const timelineResults = state.events.flatMap((event) => [
+    {
+      type: "Timeline",
+      title: event.title || "Untitled event",
+      detail: `${formatTime(event.occurred_at)} ${resultExcerpt(event.body, "")}`.trim(),
+      href: `/timeline#timeline-event-${event.id}`,
+      searchText: `${event.title || ""} ${event.body || ""} ${formatTime(event.occurred_at)}`,
+    },
+    ...attachedFileResults(event.files, event.title || "Untitled event", "Timeline", `/timeline#timeline-event-${event.id}`),
+  ]);
+
+  const imageResults = images.map((image) => ({
+    type: "Image",
+    title: image.filename,
+    detail: "Image vault",
+    href: image.url || "/images",
+    searchText: image.filename,
+  }));
+
+  const fileResults = files.map((file) => ({
+    type: "File",
+    title: file.filename,
+    detail: "File vault",
+    href: file.url || "/files",
+    searchText: file.filename,
+  }));
+
+  return [...nodeResults, ...timelineResults, ...imageResults, ...fileResults];
+}
+
+function initGlobalSearch() {
+  const input = document.querySelector("#global-search-input");
+  const results = document.querySelector("#global-search-results");
+  if (!input || !results) return;
+
+  let index = [];
+  let uploadsLoaded = false;
+  let cachedUploads = { images: [], files: [] };
+
+  const hide = () => {
+    results.hidden = true;
+  };
+
+  const render = async () => {
+    const query = input.value.trim();
+    if (!query) {
+      hide();
+      return;
+    }
+
+    if (!uploadsLoaded) {
+      uploadsLoaded = true;
+      cachedUploads = await loadSearchUploads();
+      index = buildSearchIndex(cachedUploads);
+    } else {
+      index = buildSearchIndex(cachedUploads);
+    }
+
+    const normalized = query.toLowerCase();
+    const matches = index
+      .filter((item) => String(item.searchText || "").toLowerCase().includes(normalized))
+      .slice(0, 12);
+
+    results.hidden = false;
+    if (!matches.length) {
+      results.innerHTML = '<div class="search-empty">No project results</div>';
+      return;
+    }
+
+    results.innerHTML = matches.map((item) => `
+      <a class="search-result" href="${escapeHtml(item.href)}">
+        <span class="search-result-title">${escapeHtml(item.title)}</span>
+        <span class="search-result-meta">${escapeHtml(item.type)}${item.detail ? ` - ${escapeHtml(resultExcerpt(item.detail, query))}` : ""}</span>
+      </a>
+    `).join("");
+  };
+
+  input.addEventListener("input", render);
+  input.addEventListener("focus", render);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      hide();
+      input.blur();
+    }
+    if (event.key === "Enter") {
+      const firstResult = results.querySelector(".search-result");
+      if (firstResult) {
+        event.preventDefault();
+        firstResult.click();
+      }
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".global-search")) hide();
+  });
 }
 
 function initEditorSurface({ fixedNodeId = null } = {}) {
@@ -890,8 +1052,11 @@ function initTimelinePage() {
       const orderDelta = (a.order_index ?? 0) - (b.order_index ?? 0);
       return orderDelta || eventTimeMs(b.occurred_at) - eventTimeMs(a.occurred_at);
     });
-    timelineList.innerHTML = events.map((event) => `
-      <article class="timeline-item" data-event-id="${event.id}">
+    timelineList.innerHTML = events.map((event) => {
+      const saveStatus = timelineSaveIndicators.get(event.id);
+      const saveLabel = saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "";
+      return `
+      <article id="timeline-event-${event.id}" class="timeline-item" data-event-id="${event.id}">
         <div class="timeline-drag" draggable="true" title="Drag to reorder">::</div>
         <div class="timeline-edit-fields">
           <input class="timeline-title-input" data-event-title="${event.id}" value="${escapeHtml(event.title)}" maxlength="160">
@@ -903,10 +1068,12 @@ function initTimelinePage() {
             </div>
             <button type="button" class="ghost-button danger" data-event-delete="${event.id}">Delete</button>
             <button type="button" data-event-save="${event.id}">Save</button>
+            <span class="timeline-save-indicator ${saveStatus ? `is-${saveStatus}` : ""}" aria-live="polite">${saveLabel}</span>
           </div>
         </div>
       </article>
-    `).join("");
+    `;
+    }).join("");
 
     timelineList.querySelectorAll("[data-event-body]").forEach((editor) => {
       editor.addEventListener("input", () => {
@@ -935,9 +1102,14 @@ function initTimelinePage() {
           showToast("Timeline date and time is invalid.");
           return;
         }
+        const titleValue = timelineList.querySelector(`[data-event-title="${id}"]`).value;
+        if (!titleValue.trim()) {
+          showToast("Timeline title is required.");
+          return;
+        }
         const newState = {
           id,
-          title: timelineList.querySelector(`[data-event-title="${id}"]`).value,
+          title: titleValue,
           body: editorText(editor),
           occurred_at: occurredAt,
         };
@@ -955,6 +1127,7 @@ function initTimelinePage() {
         );
 
         socket.emit("timeline:update", newState);
+        setTimelineSaveIndicator(id, "saving");
       });
     });
 
@@ -968,6 +1141,9 @@ function initTimelinePage() {
     });
 
     timelineList.querySelectorAll(".timeline-item").forEach((item) => attachTimelineDragHandlers(item, timelineList));
+    if (location.hash.startsWith("#timeline-event-")) {
+      timelineList.querySelector(location.hash)?.scrollIntoView({ block: "center" });
+    }
   }
   timelineForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -1197,7 +1373,7 @@ function initGraphPage() {
       element.innerHTML = `
         <button class="node-open" type="button">
           <strong>${escapeHtml(node.title)}</strong>
-          <span>${escapeHtml(node.caption || "No caption")}</span>
+          <span>${escapeHtml(node.caption || "")}</span>
         </button>
         <button class="node-link-handle" type="button" title="Link"></button>
       `;
@@ -1546,7 +1722,11 @@ socket.on("timeline:created", (event) => {
 
 socket.on("timeline:updated", (event) => {
   upsert(state.events, event);
-  renderCurrentPage();
+  if (timelineSaveIndicators.get(event.id) === "saving") {
+    setTimelineSaveIndicator(event.id, "saved");
+  } else {
+    renderCurrentPage();
+  }
 });
 
 socket.on("timeline:deleted", (payload) => {
@@ -1597,6 +1777,7 @@ fetch("/api/state")
     state.events = payload.events;
     state.nodes = payload.nodes;
     state.edges = payload.edges;
+    initGlobalSearch();
     state.nodes.filter((node) => node.parent_id === null).forEach((node) => state.expanded.add(node.id));
     if (page === "notes" && state.nodes.length) state.activeNodeId = sortedNodes()[0].id;
     renderCurrentPage();

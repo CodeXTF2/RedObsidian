@@ -914,6 +914,17 @@ a {
   overflow: hidden;
 }
 
+.timeline-composer {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-composer .stack-form {
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.2rem;
+}
+
 .timeline-reader {
   display: flex;
   flex-direction: column;
@@ -1024,6 +1035,7 @@ a {
   color: var(--text-strong);
   font-size: 1.05rem;
   font-weight: 800;
+  min-width: 0;
 }
 
 .timeline-body-input {
@@ -1060,6 +1072,7 @@ a {
   display: grid;
   gap: 0.25rem;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .timeline-time-field span {
@@ -1073,8 +1086,14 @@ a {
   background: #202020;
   border: 1px solid var(--line);
   border-radius: 6px;
-  min-height: 200px;
+  min-height: 300px;
   padding: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.timeline-time-row input[type="datetime-local"] {
+  min-width: 0;
+  width: 100%;
 }
 
 .timeline-body-editor .md-line {

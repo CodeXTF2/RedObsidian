@@ -19,15 +19,15 @@ Open `http://127.0.0.1:5000`.
 RedObsidian uses Flask-SocketIO for realtime collaboration, which requires an asynchronous worker class when run in production.
 
 **Cross-Platform (Windows / Linux / macOS):**
-Because Gunicorn does not support Windows natively, the simplest cross-platform production setup uses Eventlet's built-in WSGI server. Run the `wsgi.py` file directly:
+Because Gunicorn does not support Windows natively, the simplest cross-platform production setup uses Gevent's built-in WSGI server. Run the `wsgi.py` file directly:
 ```bash
 python wsgi.py
 ```
-*Note: Under the hood, `Flask-SocketIO` detects `eventlet` and automatically starts a production-ready WSGI server listening on `0.0.0.0:5000`.*
+*Note: Under the hood, `Flask-SocketIO` detects `gevent` and automatically starts a production-ready WSGI server with WebSocket support listening on `0.0.0.0:5000`.*
 
 **On Linux/macOS (Alternative using Gunicorn):**
 ```bash
-gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 wsgi:app
+gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 --bind 0.0.0.0:5000 wsgi:app
 ```
 
 

@@ -6,6 +6,7 @@ const state = {
   nodes: [],
   edges: [],
   activeNodeId: null,
+  selectedNodeIds: new Set(),
   expanded: new Set(),
   pan: { x: 0, y: 0 },
   zoom: 1,
@@ -1308,6 +1309,24 @@ function initGraphPage() {
     zoomLevel.textContent = `${Math.round(state.zoom * 100)}%`;
   }
 
+  function setGraphSelection(ids, activeId = null) {
+    state.selectedNodeIds = new Set(ids);
+    state.activeNodeId = activeId ?? ids[ids.length - 1] ?? null;
+  }
+
+  function toggleGraphSelection(nodeId) {
+    if (state.selectedNodeIds.has(nodeId)) {
+      state.selectedNodeIds.delete(nodeId);
+      if (state.activeNodeId === nodeId) {
+        const selectedIds = [...state.selectedNodeIds];
+        state.activeNodeId = selectedIds[selectedIds.length - 1] ?? null;
+      }
+    } else {
+      state.selectedNodeIds.add(nodeId);
+      state.activeNodeId = nodeId;
+    }
+  }
+
   function zoomToFit() {
     const nodes = state.nodes.filter((node) => node.in_graph !== false);
     if (!nodes.length) return;
@@ -1379,7 +1398,8 @@ function initGraphPage() {
     for (const node of state.nodes) {
       if (node.in_graph === false) continue;
       const element = document.createElement("div");
-      element.className = `graph-node ${node.id === state.activeNodeId ? "active" : ""} ${node.color ? `color-${node.color}` : ""}`;
+      const selected = state.selectedNodeIds.has(node.id);
+      element.className = `graph-node ${selected ? "selected" : ""} ${node.id === state.activeNodeId ? "active" : ""} ${node.color ? `color-${node.color}` : ""}`;
       element.dataset.nodeId = node.id;
       element.innerHTML = `
         <button class="node-open" type="button">
@@ -1392,14 +1412,25 @@ function initGraphPage() {
         if (event.button !== 0) return;
         event.preventDefault();
         const world = screenToWorld(event.clientX, event.clientY);
+        const isMultiSelect = event.ctrlKey || event.metaKey || event.shiftKey;
+        const wasSelected = state.selectedNodeIds.has(node.id);
+        let moveIds = wasSelected ? [...state.selectedNodeIds] : [node.id];
+        if (!wasSelected && isMultiSelect) moveIds = [...state.selectedNodeIds, node.id];
+        const moveStart = moveIds
+          .map((id) => state.nodes.find((item) => item.id === id))
+          .filter(Boolean)
+          .map((item) => ({ id: item.id, x: item.x, y: item.y }));
         interaction = {
           type: "move",
           node,
+          isMultiSelect,
+          wasSelected,
+          moveStart,
           pointerId: event.pointerId,
           startX: event.clientX,
           startY: event.clientY,
-          startWorldX: node.x,
-          startWorldY: node.y,
+          anchorStartX: node.x,
+          anchorStartY: node.y,
           offsetX: world.x - node.x,
           offsetY: world.y - node.y,
           moved: false,
@@ -1420,6 +1451,7 @@ function initGraphPage() {
 
   closePanelButton?.addEventListener("click", () => {
     state.activeNodeId = null;
+    state.selectedNodeIds.clear();
     renderGraph();
   });
 
@@ -1471,6 +1503,7 @@ function initGraphPage() {
         e.stopPropagation();
         if (typeof window.cancelPendingSave === "function") window.cancelPendingSave();
         socket.emit("node:delete", { id: nodeId });
+        state.selectedNodeIds.delete(nodeId);
         contextMenu.hidden = true;
         document.removeEventListener("pointerdown", cleanup);
       };
@@ -1512,10 +1545,18 @@ function initGraphPage() {
     if (!interaction || event.pointerId !== interaction.pointerId) return;
     if (interaction.type === "move") {
       const world = screenToWorld(event.clientX, event.clientY);
-      interaction.node.x = Math.max(-4000, Math.min(4000, world.x - interaction.offsetX));
-      interaction.node.y = Math.max(-4000, Math.min(4000, world.y - interaction.offsetY));
+      const nextX = Math.max(-4000, Math.min(4000, world.x - interaction.offsetX));
+      const nextY = Math.max(-4000, Math.min(4000, world.y - interaction.offsetY));
+      const deltaX = nextX - interaction.anchorStartX;
+      const deltaY = nextY - interaction.anchorStartY;
       interaction.moved = interaction.moved || Math.hypot(event.clientX - interaction.startX, event.clientY - interaction.startY) > 4;
-      positionNodeElement(interaction.node);
+      interaction.moveStart.forEach((start) => {
+        const movingNode = state.nodes.find((item) => item.id === start.id);
+        if (!movingNode) return;
+        movingNode.x = Math.max(-4000, Math.min(4000, start.x + deltaX));
+        movingNode.y = Math.max(-4000, Math.min(4000, start.y + deltaY));
+        positionNodeElement(movingNode);
+      });
       renderEdges();
     }
     if (interaction.type === "link") {
@@ -1539,9 +1580,22 @@ function initGraphPage() {
     interaction = null;
     draftLayer.innerHTML = "";
     if (done.type === "move") {
-      if (done.moved) socket.emit("node:update", { id: done.node.id, x: done.node.x, y: done.node.y });
+      if (done.moved) {
+        if (!state.selectedNodeIds.has(done.node.id)) {
+          setGraphSelection(done.moveStart.map((item) => item.id), done.node.id);
+          renderGraph();
+        }
+        done.moveStart.forEach((start) => {
+          const movedNode = state.nodes.find((item) => item.id === start.id);
+          if (movedNode) socket.emit("node:update", { id: movedNode.id, x: movedNode.x, y: movedNode.y });
+        });
+      }
       else {
-        state.activeNodeId = done.node.id;
+        if (done.isMultiSelect) {
+          toggleGraphSelection(done.node.id);
+        } else {
+          setGraphSelection([done.node.id], done.node.id);
+        }
         renderGraph();
       }
     }
@@ -1758,6 +1812,7 @@ socket.on("node:updated", (node) => {
 socket.on("node:deleted", (payload) => {
   state.nodes = state.nodes.filter((node) => node.id !== Number(payload.id));
   state.edges = state.edges.filter((edge) => edge.source_id !== Number(payload.id) && edge.target_id !== Number(payload.id));
+  state.selectedNodeIds.delete(Number(payload.id));
   if (state.activeNodeId === Number(payload.id)) state.activeNodeId = null;
   renderCurrentPage();
 });

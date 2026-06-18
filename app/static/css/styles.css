@@ -770,16 +770,23 @@ a {
   transform-origin: 0 0;
 }
 
-.graph-node.active {
+.graph-node.active,
+.graph-node.selected {
   box-shadow: 0 0 20px 4px rgba(210, 168, 255, 0.35), 0 0 0 3px #d2a8ff, 0 14px 30px rgba(0, 0, 0, 0.38);
 }
 
-.graph-node.active.color-red { box-shadow: 0 0 20px 4px rgba(255, 123, 114, 0.35), 0 0 0 3px #ff7b72, 0 14px 30px rgba(0, 0, 0, 0.38); }
-.graph-node.active.color-orange { box-shadow: 0 0 20px 4px rgba(255, 166, 87, 0.35), 0 0 0 3px #ffa657, 0 14px 30px rgba(0, 0, 0, 0.38); }
-.graph-node.active.color-yellow { box-shadow: 0 0 20px 4px rgba(242, 204, 96, 0.35), 0 0 0 3px #f2cc60, 0 14px 30px rgba(0, 0, 0, 0.38); }
-.graph-node.active.color-green { box-shadow: 0 0 20px 4px rgba(126, 231, 135, 0.35), 0 0 0 3px #7ee787, 0 14px 30px rgba(0, 0, 0, 0.38); }
-.graph-node.active.color-blue { box-shadow: 0 0 20px 4px rgba(121, 192, 255, 0.35), 0 0 0 3px #79c0ff, 0 14px 30px rgba(0, 0, 0, 0.38); }
-.graph-node.active.color-pink { box-shadow: 0 0 20px 4px rgba(247, 143, 179, 0.35), 0 0 0 3px #f78fb3, 0 14px 30px rgba(0, 0, 0, 0.38); }
+.graph-node.active.color-red,
+.graph-node.selected.color-red { box-shadow: 0 0 20px 4px rgba(255, 123, 114, 0.35), 0 0 0 3px #ff7b72, 0 14px 30px rgba(0, 0, 0, 0.38); }
+.graph-node.active.color-orange,
+.graph-node.selected.color-orange { box-shadow: 0 0 20px 4px rgba(255, 166, 87, 0.35), 0 0 0 3px #ffa657, 0 14px 30px rgba(0, 0, 0, 0.38); }
+.graph-node.active.color-yellow,
+.graph-node.selected.color-yellow { box-shadow: 0 0 20px 4px rgba(242, 204, 96, 0.35), 0 0 0 3px #f2cc60, 0 14px 30px rgba(0, 0, 0, 0.38); }
+.graph-node.active.color-green,
+.graph-node.selected.color-green { box-shadow: 0 0 20px 4px rgba(126, 231, 135, 0.35), 0 0 0 3px #7ee787, 0 14px 30px rgba(0, 0, 0, 0.38); }
+.graph-node.active.color-blue,
+.graph-node.selected.color-blue { box-shadow: 0 0 20px 4px rgba(121, 192, 255, 0.35), 0 0 0 3px #79c0ff, 0 14px 30px rgba(0, 0, 0, 0.38); }
+.graph-node.active.color-pink,
+.graph-node.selected.color-pink { box-shadow: 0 0 20px 4px rgba(247, 143, 179, 0.35), 0 0 0 3px #f78fb3, 0 14px 30px rgba(0, 0, 0, 0.38); }
 
 .graph-node-panel {
   border-left: 1px solid var(--line);

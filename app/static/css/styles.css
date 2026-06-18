@@ -759,6 +759,20 @@ a {
   width: 100%;
 }
 
+.graph-selection-box {
+  background: rgba(45, 212, 191, 0.14);
+  border: 1px solid var(--accent-2);
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.18);
+  pointer-events: none;
+  position: absolute;
+  z-index: 5;
+}
+
+.graph-selection-box[hidden] {
+  display: none;
+}
+
 .graph-node {
   background: #4a2d6b;
   border: 1px solid #d2a8ff;
@@ -768,6 +782,7 @@ a {
   position: absolute;
   width: 184px;
   transform-origin: 0 0;
+  z-index: 10;
 }
 
 .graph-node.active,

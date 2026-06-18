@@ -1246,9 +1246,13 @@ function initGraphPage() {
   const edgeLayer = document.querySelector("#edge-layer");
   const draftLayer = document.querySelector("#draft-layer");
   const nodeLayer = document.querySelector("#node-layer");
+  const selectionBox = document.createElement("div");
   const renderEditor = initEditorSurface();
   let interaction = null;
   let lastPanMoved = false;
+  selectionBox.className = "graph-selection-box";
+  selectionBox.hidden = true;
+  graphCanvas.appendChild(selectionBox);
 
   const worldToScreen = (point) => ({ x: point.x * state.zoom + state.pan.x, y: point.y * state.zoom + state.pan.y });
   const screenToWorld = (clientX, clientY) => {
@@ -1325,6 +1329,43 @@ function initGraphPage() {
       state.selectedNodeIds.add(nodeId);
       state.activeNodeId = nodeId;
     }
+  }
+
+  function refreshGraphSelectionStyles(updateEditor = true) {
+    nodeLayer.querySelectorAll(".graph-node").forEach((element) => {
+      const nodeId = Number(element.dataset.nodeId);
+      element.classList.toggle("selected", state.selectedNodeIds.has(nodeId));
+      element.classList.toggle("active", nodeId === state.activeNodeId);
+    });
+    if (updateEditor) renderGraphEditor();
+  }
+
+  function selectionRect(startX, startY, endX, endY) {
+    return {
+      left: Math.min(startX, endX),
+      top: Math.min(startY, endY),
+      right: Math.max(startX, endX),
+      bottom: Math.max(startY, endY),
+    };
+  }
+
+  function updateSelectionBox(rect) {
+    const canvasRect = graphCanvas.getBoundingClientRect();
+    selectionBox.hidden = false;
+    selectionBox.style.left = `${rect.left - canvasRect.left}px`;
+    selectionBox.style.top = `${rect.top - canvasRect.top}px`;
+    selectionBox.style.width = `${rect.right - rect.left}px`;
+    selectionBox.style.height = `${rect.bottom - rect.top}px`;
+  }
+
+  function rectsIntersect(a, b) {
+    return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+  }
+
+  function nodeIdsInSelectionRect(rect) {
+    return Array.from(nodeLayer.querySelectorAll(".graph-node"))
+      .filter((element) => rectsIntersect(rect, element.getBoundingClientRect()))
+      .map((element) => Number(element.dataset.nodeId));
   }
 
   function zoomToFit() {
@@ -1528,6 +1569,21 @@ function initGraphPage() {
 
   graphCanvas.addEventListener("pointerdown", (event) => {
     if (event.button === 2) lastPanMoved = false;
+    if (event.button === 0 && !event.target.closest(".graph-node")) {
+      event.preventDefault();
+      contextMenu.hidden = true;
+      interaction = {
+        type: "select",
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        additive: event.ctrlKey || event.metaKey || event.shiftKey,
+        baseIds: [...state.selectedNodeIds],
+        moved: false,
+      };
+      updateSelectionBox(selectionRect(event.clientX, event.clientY, event.clientX, event.clientY));
+      return;
+    }
     if (event.button !== 2 || event.target.closest(".graph-node")) return;
     event.preventDefault();
     interaction = {
@@ -1571,6 +1627,15 @@ function initGraphPage() {
       state.nodes.forEach(positionNodeElement);
       renderEdges();
     }
+    if (interaction.type === "select") {
+      const rect = selectionRect(interaction.startX, interaction.startY, event.clientX, event.clientY);
+      interaction.moved = interaction.moved || Math.hypot(event.clientX - interaction.startX, event.clientY - interaction.startY) > 4;
+      updateSelectionBox(rect);
+      const selectedIds = nodeIdsInSelectionRect(rect);
+      const nextIds = interaction.additive ? [...new Set([...interaction.baseIds, ...selectedIds])] : selectedIds;
+      setGraphSelection(nextIds, nextIds[nextIds.length - 1] ?? null);
+      refreshGraphSelectionStyles(false);
+    }
   });
 
   document.addEventListener("pointerup", (event) => {
@@ -1579,6 +1644,7 @@ function initGraphPage() {
     const done = interaction;
     interaction = null;
     draftLayer.innerHTML = "";
+    selectionBox.hidden = true;
     if (done.type === "move") {
       if (done.moved) {
         if (!state.selectedNodeIds.has(done.node.id)) {
@@ -1615,6 +1681,12 @@ function initGraphPage() {
         );
         socket.emit("edge:create", edgeData);
       }
+    }
+    if (done.type === "select" && !done.moved && !done.additive) {
+      setGraphSelection([], null);
+      renderGraph();
+    } else if (done.type === "select") {
+      renderGraphEditor();
     }
   });
 

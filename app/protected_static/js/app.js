@@ -1050,6 +1050,7 @@ function initTimelinePage() {
   const eventBody = document.querySelector("#event-body");
   const eventTime = document.querySelector("#event-time");
   const eventTimeNow = document.querySelector("#event-time-now");
+  const timelineAutoSort = document.querySelector("#timeline-auto-sort");
 
   eventBody?.addEventListener("input", () => {
     setEditorMarkdown(eventBody, editorText(eventBody), true);
@@ -1057,6 +1058,11 @@ function initTimelinePage() {
 
   eventTimeNow?.addEventListener("click", () => {
     eventTime.value = toLocalInputValue();
+  });
+
+  timelineAutoSort?.addEventListener("click", () => {
+    if (!confirm("Re-apply automatic timeline sorting by date and time? This will discard all manual rearrangements.")) return;
+    socket.emit("timeline:auto_sort");
   });
 
   function renderTimeline() {
@@ -1869,6 +1875,15 @@ socket.on("timeline:updated", (event) => {
 socket.on("timeline:deleted", (payload) => {
   state.events = state.events.filter(e => e.id !== payload.id);
   renderCurrentPage();
+});
+
+socket.on("timeline:reset", (payload) => {
+  state.events = payload.events || [];
+  timelineSaveIndicators.clear();
+  timelineSaveTimers.forEach((timer) => clearTimeout(timer));
+  timelineSaveTimers.clear();
+  renderCurrentPage();
+  showToast("Timeline auto sorted");
 });
 
 socket.on("node:created", (node) => {

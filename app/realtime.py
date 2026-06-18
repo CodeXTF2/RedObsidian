@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import db
 from .main import parse_iso_datetime
-from .models import GraphEdge, GraphNode, TimelineEvent
+from .models import GraphEdge, GraphNode, TimelineEvent, as_utc
 
 
 def get_current_project_id():
@@ -24,17 +24,18 @@ def is_descendant(node_id, possible_parent_id):
     return False
 
 
-def automatic_timeline_order(occurred_at, project_id):
-    auto_events = TimelineEvent.query.filter_by(manual_order=False, project_id=project_id).order_by(TimelineEvent.occurred_at.desc()).all()
+def automatic_timeline_order(occurred_at, project_id, exclude_id=None):
+    auto_events = TimelineEvent.query.filter_by(manual_order=False, project_id=project_id).all()
+    if exclude_id is not None:
+        auto_events = [event for event in auto_events if event.id != exclude_id]
+    auto_events.sort(key=lambda event: as_utc(event.occurred_at), reverse=True)
     if not auto_events:
         return 0
 
     insert_at = 0
     for index, event in enumerate(auto_events):
-        event_time = event.occurred_at
-        if event_time.tzinfo is None:
-            event_time = event_time.replace(tzinfo=occurred_at.tzinfo)
-        if occurred_at <= event_time:
+        event_time = as_utc(event.occurred_at)
+        if as_utc(occurred_at) <= event_time:
             insert_at = index + 1
 
     previous_event = auto_events[insert_at - 1] if insert_at > 0 else None
@@ -47,6 +48,15 @@ def automatic_timeline_order(occurred_at, project_id):
     if next_event:
         return next_event.order_index - 1
     return 0
+
+
+def reset_timeline_auto_order(project_id):
+    events = TimelineEvent.query.filter_by(project_id=project_id).all()
+    events.sort(key=lambda event: as_utc(event.occurred_at), reverse=True)
+    for index, event in enumerate(events):
+        event.order_index = float(index)
+        event.manual_order = False
+    return events
 
 
 def parse_timeline_datetime(value):
@@ -122,6 +132,8 @@ def register_socket_handlers(socketio):
                 emit("error:message", {"message": "Timeline date and time is invalid."})
                 return
             event.occurred_at = occurred_at
+            if not event.manual_order:
+                event.order_index = automatic_timeline_order(occurred_at, project_id, exclude_id=event.id)
 
         db.session.commit()
         emit("timeline:updated", event.to_dict(), broadcast=True)
@@ -138,10 +150,25 @@ def register_socket_handlers(socketio):
             emit("error:message", {"message": "Timeline event not found."})
             return
 
-        event.order_index = float((payload or {}).get("order_index", event.order_index))
+        try:
+            event.order_index = float((payload or {}).get("order_index", event.order_index))
+        except (TypeError, ValueError):
+            emit("error:message", {"message": "Timeline order is invalid."})
+            return
         event.manual_order = True
         db.session.commit()
         emit("timeline:updated", event.to_dict(), broadcast=True)
+
+    @socketio.on("timeline:auto_sort")
+    def auto_sort_timeline_events():
+        project_id = get_current_project_id()
+        if not current_user.is_authenticated or not project_id:
+            disconnect()
+            return
+
+        events = reset_timeline_auto_order(project_id)
+        db.session.commit()
+        emit("timeline:reset", {"events": [event.to_dict() for event in events]}, broadcast=True)
 
     @socketio.on("timeline:delete")
     def delete_timeline_event(payload):

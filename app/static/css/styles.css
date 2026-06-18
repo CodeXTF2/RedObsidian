@@ -197,11 +197,12 @@ a {
 .notes-layout,
 .node-page-layout {
   display: grid;
-  min-height: calc(100vh - 44px);
+  height: calc(100vh - 44px);
 }
 
 .notes-layout {
   grid-template-columns: 300px minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .node-page-layout {
@@ -211,7 +212,9 @@ a {
 .vault-sidebar {
   background: var(--sidebar);
   border-right: 1px solid var(--line);
-  min-height: calc(100vh - 44px);
+  height: calc(100vh - 44px);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   padding: 0.75rem 0.6rem;
 }
@@ -226,6 +229,7 @@ a {
   margin-bottom: 0.55rem;
   padding: 0 0.35rem;
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .icon-button {
@@ -239,7 +243,7 @@ a {
 
 .node-list {
   color: var(--muted);
-  height: calc(100vh - 92px);
+  flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   padding-bottom: 60px;
@@ -340,8 +344,9 @@ a {
 
 .document-shell {
   background: var(--document);
-  min-height: calc(100vh - 44px);
-  overflow: auto;
+  height: calc(100vh - 44px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .node-editor {

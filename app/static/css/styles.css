@@ -1048,13 +1048,18 @@ a {
 .timeline-time-row {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
+}
+
+.timeline-time-row .ghost-button {
+  justify-self: start;
 }
 
 .timeline-time-field {
   display: grid;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .timeline-time-field span {
@@ -1083,22 +1088,23 @@ a {
 
 .timeline-row-actions {
   align-items: center;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto auto minmax(62px, 1fr);
   gap: 0.8rem;
 }
 
 .timeline-time-input-group {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-right: auto;
+  align-items: end;
+  display: grid;
+  gap: 0.5rem;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  width: 100%;
 }
 
 .timeline-time-input {
-  min-width: 220px;
-  width: auto;
+  min-width: 0;
+  width: 100%;
 }
 
 .timeline-save-indicator {
@@ -1398,6 +1404,10 @@ a {
   }
 
   .timeline-time-row {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-time-input-group {
     grid-template-columns: 1fr;
   }
 

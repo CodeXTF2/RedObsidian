@@ -277,9 +277,10 @@ function restoreCaret(root, offset) {
 }
 
 function setEditorMarkdown(editor, markdown, preserveCaret = false) {
-  const offset = preserveCaret ? caretOffset(editor) : 0;
+  const hasFocus = editor.contains(document.activeElement);
+  const offset = (preserveCaret && hasFocus) ? caretOffset(editor) : 0;
   editor.innerHTML = markdownToLiveHtml(markdown);
-  if (preserveCaret) restoreCaret(editor, offset);
+  if (preserveCaret && hasFocus) restoreCaret(editor, offset);
 }
 
 function debounce(callback, delay) {

@@ -16,6 +16,28 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--line) #202020;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #202020;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 2px solid #202020;
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--faint);
 }
 
 body {
@@ -935,27 +957,6 @@ a {
   gap: 0.8rem;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-color: var(--line) #202020;
-  scrollbar-width: thin;
-}
-
-.timeline-list::-webkit-scrollbar {
-  width: 10px;
-}
-
-.timeline-list::-webkit-scrollbar-track {
-  background: #202020;
-  border-radius: 999px;
-}
-
-.timeline-list::-webkit-scrollbar-thumb {
-  background: var(--line);
-  border: 2px solid #202020;
-  border-radius: 999px;
-}
-
-.timeline-list::-webkit-scrollbar-thumb:hover {
-  background: var(--faint);
 }
 
 .timeline-list-full {

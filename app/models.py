@@ -11,6 +11,16 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
+def as_utc(value):
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def isoformat_utc(value):
+    return as_utc(value).isoformat().replace("+00:00", "Z")
+
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False, index=True)
@@ -38,7 +48,7 @@ class Project(db.Model):
             "id": self.id,
             "name": self.name,
             "description": self.description or "",
-            "created_at": self.created_at.isoformat(),
+            "created_at": isoformat_utc(self.created_at),
             "created_by": self.created_by.username,
         }
 
@@ -69,10 +79,10 @@ class TimelineEvent(db.Model):
             "title": self.title,
             "body": self.body or "",
             "files": files,
-            "occurred_at": self.occurred_at.isoformat(),
+            "occurred_at": isoformat_utc(self.occurred_at),
             "order_index": self.order_index,
             "manual_order": self.manual_order,
-            "created_at": self.created_at.isoformat(),
+            "created_at": isoformat_utc(self.created_at),
             "author": self.user.username,
         }
 
@@ -117,7 +127,7 @@ class GraphNode(db.Model):
             "x": self.x,
             "y": self.y,
             "author": self.user.username,
-            "updated_at": self.updated_at.isoformat(),
+            "updated_at": isoformat_utc(self.updated_at),
         }
 
 

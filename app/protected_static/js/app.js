@@ -293,14 +293,58 @@ function debounce(callback, delay) {
   return fn;
 }
 
-function toLocalInputValue(date = new Date()) {
-  if (!(date instanceof Date)) date = new Date(date);
+function parseServerDate(value = new Date()) {
+  if (value instanceof Date) return value;
+  if (typeof value === "string" && value.trim()) {
+    const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`;
+    return new Date(normalized);
+  }
+  return new Date(value);
+}
+
+function eventTimeMs(value) {
+  const time = parseServerDate(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function toLocalInputValue(value = new Date()) {
+  const date = parseServerDate(value);
+  if (Number.isNaN(date.getTime())) return "";
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function localInputValueToIso(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second = "0", millisecond = "0"] = match;
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+    Number(millisecond.padEnd(3, "0"))
+  );
+
+  if (
+    date.getFullYear() !== Number(year) ||
+    date.getMonth() !== Number(month) - 1 ||
+    date.getDate() !== Number(day) ||
+    date.getHours() !== Number(hour) ||
+    date.getMinutes() !== Number(minute) ||
+    date.getSeconds() !== Number(second)
+  ) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+
 function formatTime(value) {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parseServerDate(value));
 }
 
 function initEditorSurface({ fixedNodeId = null } = {}) {
@@ -844,7 +888,7 @@ function initTimelinePage() {
   function renderTimeline() {
     const events = [...state.events].sort((a, b) => {
       const orderDelta = (a.order_index ?? 0) - (b.order_index ?? 0);
-      return orderDelta || new Date(b.occurred_at) - new Date(a.occurred_at);
+      return orderDelta || eventTimeMs(b.occurred_at) - eventTimeMs(a.occurred_at);
     });
     timelineList.innerHTML = events.map((event) => `
       <article class="timeline-item" data-event-id="${event.id}">
@@ -886,12 +930,16 @@ function initTimelinePage() {
 
         const editor = timelineList.querySelector(`[data-event-body="${id}"]`);
         const timeValue = timelineList.querySelector(`[data-event-time="${id}"]`).value;
-        const localDate = new Date(timeValue);
+        const occurredAt = localInputValueToIso(timeValue);
+        if (!occurredAt) {
+          showToast("Timeline date and time is invalid.");
+          return;
+        }
         const newState = {
           id,
           title: timelineList.querySelector(`[data-event-title="${id}"]`).value,
           body: editorText(editor),
-          occurred_at: localDate.toISOString(),
+          occurred_at: occurredAt,
         };
 
         const prevState = {
@@ -924,11 +972,15 @@ function initTimelinePage() {
   timelineForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const timeValue = eventTime.value;
-    const localDate = new Date(timeValue);
+    const occurredAt = localInputValueToIso(timeValue);
+    if (!occurredAt) {
+      showToast("Timeline date and time is invalid.");
+      return;
+    }
     socket.emit("timeline:create", {
       title: eventTitle.value,
       body: editorText(eventBody),
-      occurred_at: localDate.toISOString(),
+      occurred_at: occurredAt,
     });
     timelineForm.reset();
     eventBody.innerHTML = "";
@@ -970,7 +1022,7 @@ function timelineDropZone(item, clientY) {
 function orderedEvents() {
   return [...state.events].sort((a, b) => {
     const orderDelta = (a.order_index ?? 0) - (b.order_index ?? 0);
-    return orderDelta || new Date(b.occurred_at) - new Date(a.occurred_at);
+    return orderDelta || eventTimeMs(b.occurred_at) - eventTimeMs(a.occurred_at);
   });
 }
 

@@ -49,6 +49,13 @@ def automatic_timeline_order(occurred_at, project_id):
     return 0
 
 
+def parse_timeline_datetime(value):
+    try:
+        return parse_iso_datetime(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def register_socket_handlers(socketio):
     @socketio.on("connect")
     def connect():
@@ -69,13 +76,17 @@ def register_socket_handlers(socketio):
         if not title:
             emit("error:message", {"message": "Timeline title is required."})
             return
+        occurred_at = parse_timeline_datetime((payload or {}).get("occurred_at"))
+        if occurred_at is None:
+            emit("error:message", {"message": "Timeline date and time is invalid."})
+            return
 
         event = TimelineEvent(
             project_id=project_id,
             title=title[:160],
             body=body,
             files_json=json.dumps((payload or {}).get("files", [])),
-            occurred_at=parse_iso_datetime((payload or {}).get("occurred_at")),
+            occurred_at=occurred_at,
             user_id=current_user.id,
         )
         event.order_index = automatic_timeline_order(event.occurred_at, project_id)
@@ -106,7 +117,11 @@ def register_socket_handlers(socketio):
         if "files" in payload:
             event.files_json = json.dumps(payload.get("files", []))
         if "occurred_at" in payload:
-            event.occurred_at = parse_iso_datetime(payload.get("occurred_at"))
+            occurred_at = parse_timeline_datetime(payload.get("occurred_at"))
+            if occurred_at is None:
+                emit("error:message", {"message": "Timeline date and time is invalid."})
+                return
+            event.occurred_at = occurred_at
 
         db.session.commit()
         emit("timeline:updated", event.to_dict(), broadcast=True)

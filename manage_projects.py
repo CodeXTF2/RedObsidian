@@ -4,8 +4,8 @@ import argparse
 import os
 import shutil
 import pyzipper
-from datetime import datetime
 from app import create_app, db
+from app.main import parse_iso_datetime
 from app.models import Project, TimelineEvent, GraphNode, GraphEdge, User
 
 def export_project(project_name, output_file, password):
@@ -120,7 +120,7 @@ def import_project(input_file, password, new_name=None):
                         title=e_data["title"],
                         body=e_data["body"],
                         files_json=json.dumps(e_data["files"]),
-                        occurred_at=datetime.fromisoformat(e_data["occurred_at"]),
+                        occurred_at=parse_iso_datetime(e_data["occurred_at"]),
                         order_index=e_data["order_index"],
                         manual_order=e_data["manual_order"],
                         user_id=owner.id

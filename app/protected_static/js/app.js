@@ -483,15 +483,15 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
     return null;
   };
 
-  const insertTextAtCaret = (editor, text) => {
+  const insertTextAtCaret = (editor, text, addNewlines = false) => {
     const selection = window.getSelection();
     if (!selection.rangeCount) return;
     const range = selection.getRangeAt(0);
     
-    // Ensure image is on its own line by adding newlines if needed
-    const textToInsert = `\n${text}\n`;
+    const textToInsert = addNewlines ? `\n${text}\n` : text;
     
     const node = document.createTextNode(textToInsert);
+    range.deleteContents();
     range.insertNode(node);
     range.setStartAfter(node);
     range.collapse(true);
@@ -500,31 +500,47 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
     
     // Trigger update
     setEditorMarkdown(editor, editorText(editor), true);
-    save();
+    editor.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
-  notes?.addEventListener("paste", async (event) => {
+  document.addEventListener("paste", async (event) => {
+    const editor = event.target.closest(".live-markdown-editor");
+    if (!editor) return;
+
     const items = event.clipboardData?.items;
-    if (!items) return;
-    for (const item of items) {
-      if (item.kind === "file") {
-        event.preventDefault();
-        const file = item.getAsFile();
-        const result = await uploadFile(file);
-        if (result) {
-          if (result.isImage) {
-            insertTextAtCaret(notes, `![${result.name}](${result.url})`);
-          } else {
-            if (typeof window.flushPendingSave === "function") window.flushPendingSave();
-            const node = currentNode();
-            if (node) {
-              node.files = node.files || [];
-              node.files.push({ name: result.name, url: result.url });
-              renderEditor();
-              socket.emit("node:update", { id: node.id, files: node.files });
+    let hasFile = false;
+    
+    if (items) {
+      for (const item of items) {
+        if (item.kind === "file") {
+          hasFile = true;
+          event.preventDefault();
+          const file = item.getAsFile();
+          const result = await uploadFile(file);
+          if (result) {
+            if (result.isImage) {
+              insertTextAtCaret(editor, `![${result.name}](${result.url})`, true);
+            } else if (editor === notes) {
+              if (typeof window.flushPendingSave === "function") window.flushPendingSave();
+              const node = currentNode();
+              if (node) {
+                node.files = node.files || [];
+                node.files.push({ name: result.name, url: result.url });
+                renderEditor();
+                socket.emit("node:update", { id: node.id, files: node.files });
+              }
             }
           }
         }
+      }
+    }
+
+    // Handle plain text paste if no files were found
+    if (!hasFile) {
+      const text = event.clipboardData?.getData("text/plain");
+      if (text) {
+        event.preventDefault();
+        insertTextAtCaret(editor, text, false);
       }
     }
   });

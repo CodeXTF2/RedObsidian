@@ -5,7 +5,7 @@
   <section class="auth-panel">
     <div>
       <h1 class="brand brand-large">RedObsidian</h1>
-      <p class="eyebrow">{{ "Create account" if mode == "register" else "Sign in" }}</p>
+      <p class="eyebrow">Sign in</p>
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -21,20 +21,14 @@
     <form method="post" class="auth-form">
       <label>
         <span>Username</span>
-        <input name="username" autocomplete="username" required minlength="3">
+        <input name="username" autocomplete="username" required>
       </label>
       <label>
         <span>Password</span>
-        <input name="password" type="password" autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}" required minlength="8">
+        <input name="password" type="password" autocomplete="current-password" required>
       </label>
-      <button type="submit">{{ "Create account" if mode == "register" else "Sign in" }}</button>
+      <button type="submit">Sign in</button>
     </form>
-
-    {% if mode == "register" %}
-      <p class="auth-switch">Already have an account? <a href="{{ url_for('auth.login') }}">Sign in</a></p>
-    {% else %}
-      <p class="auth-switch">Need an account? <a href="{{ url_for('auth.register') }}">Create one</a></p>
-    {% endif %}
   </section>
 </main>
 {% endblock %}

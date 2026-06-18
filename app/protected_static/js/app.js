@@ -510,6 +510,9 @@ function initNotesPage() {
   }
 
   function renderNotes() {
+    if (!state.activeNodeId && state.nodes.length) {
+      state.activeNodeId = sortedNodes()[0].id;
+    }
     nodeList.innerHTML = renderTree() || '<div class="empty-tree">No pages</div>';
     nodeList.querySelectorAll("[data-select-id]").forEach((button) => {
       button.addEventListener("click", () => {

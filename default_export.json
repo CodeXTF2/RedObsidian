@@ -1,0 +1,45 @@
+{
+    "project": {
+        "id": 1,
+        "name": "Default Project",
+        "description": "Auto-generated default project",
+        "created_at": "2026-06-18T06:18:08.353758",
+        "created_by": "sad"
+    },
+    "timeline_events": [],
+    "graph_nodes": [
+        {
+            "id": 1,
+            "project_id": 1,
+            "parent_id": null,
+            "title": "Untitled page",
+            "caption": "",
+            "notes": "",
+            "files": [],
+            "order_index": 0.0,
+            "color": "",
+            "in_graph": true,
+            "x": 363.0,
+            "y": 46.0,
+            "author": "testuser",
+            "updated_at": "2026-06-18T06:08:23.625413"
+        },
+        {
+            "id": 2,
+            "project_id": 1,
+            "parent_id": null,
+            "title": "Untitled page",
+            "caption": "",
+            "notes": "",
+            "files": [],
+            "order_index": 1.0,
+            "color": "",
+            "in_graph": true,
+            "x": -82.0,
+            "y": -46.0,
+            "author": "testuser",
+            "updated_at": "2026-06-18T06:08:30.779562"
+        }
+    ],
+    "graph_edges": []
+}

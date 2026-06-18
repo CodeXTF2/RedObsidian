@@ -24,8 +24,28 @@ class User(UserMixin, db.Model):
         return check_password_hash(self.password_hash, password)
 
 
+class Project(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+
+    created_by = db.relationship("User")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description or "",
+            "created_at": self.created_at.isoformat(),
+            "created_by": self.created_by.username,
+        }
+
+
 class TimelineEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
     title = db.Column(db.String(160), nullable=False)
     body = db.Column(db.Text, nullable=True)
     files_json = db.Column(db.Text, default="[]", nullable=False)
@@ -35,6 +55,7 @@ class TimelineEvent(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
+    project = db.relationship("Project")
     user = db.relationship("User")
 
     def to_dict(self):
@@ -44,6 +65,7 @@ class TimelineEvent(db.Model):
             files = []
         return {
             "id": self.id,
+            "project_id": self.project_id,
             "title": self.title,
             "body": self.body or "",
             "files": files,
@@ -57,6 +79,7 @@ class TimelineEvent(db.Model):
 
 class GraphNode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
     parent_id = db.Column(db.Integer, db.ForeignKey("graph_node.id"), nullable=True, index=True)
     title = db.Column(db.String(120), nullable=False)
     caption = db.Column(db.String(280), nullable=True)
@@ -71,6 +94,7 @@ class GraphNode(db.Model):
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
+    project = db.relationship("Project")
     user = db.relationship("User")
     parent = db.relationship("GraphNode", remote_side=[id], backref="children")
 
@@ -81,6 +105,7 @@ class GraphNode(db.Model):
             files = []
         return {
             "id": self.id,
+            "project_id": self.project_id,
             "parent_id": self.parent_id,
             "title": self.title,
             "caption": self.caption or "",
@@ -98,6 +123,7 @@ class GraphNode(db.Model):
 
 class GraphEdge(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
     source_id = db.Column(db.Integer, db.ForeignKey("graph_node.id"), nullable=False)
     target_id = db.Column(db.Integer, db.ForeignKey("graph_node.id"), nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
@@ -108,6 +134,7 @@ class GraphEdge(db.Model):
         db.UniqueConstraint("source_id", "target_id", name="unique_directed_edge"),
     )
 
+    project = db.relationship("Project")
     source = db.relationship("GraphNode", foreign_keys=[source_id])
     target = db.relationship("GraphNode", foreign_keys=[target_id])
     user = db.relationship("User")
@@ -115,6 +142,7 @@ class GraphEdge(db.Model):
     def to_dict(self):
         return {
             "id": self.id,
+            "project_id": self.project_id,
             "source_id": self.source_id,
             "target_id": self.target_id,
             "author": self.user.username,

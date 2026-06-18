@@ -5,6 +5,7 @@
   <header class="topbar">
     <a class="brand" href="{{ url_for('main.notes') }}">RedObsidian</a>
     <nav class="main-nav" aria-label="Primary">
+      <a class="{{ 'active' if active_page == 'projects' else '' }}" href="{{ url_for('main.projects') }}">Projects</a>
       <a class="{{ 'active' if active_page == 'notes' else '' }}" href="{{ url_for('main.notes') }}">Vault</a>
       <a class="{{ 'active' if active_page == 'graph' else '' }}" href="{{ url_for('main.graph') }}">Graph</a>
       <a class="{{ 'active' if active_page == 'images' else '' }}" href="{{ url_for('main.images') }}">Images</a>
@@ -18,5 +19,5 @@
   {% block app_body %}{% endblock %}
 </div>
 <div id="toast" class="toast" hidden></div>
-<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+<script src="{{ url_for('main.serve_js') }}" defer></script>
 {% endblock %}

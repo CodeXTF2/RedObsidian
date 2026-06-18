@@ -1,6 +1,6 @@
 # RedObsidian
 
-A minimal Flask collaboration app with secure account creation, login, realtime markdown pages, a shared graph workspace, and a standalone timeline.
+A minimal Flask collaboration app with a multi-project system, CLI-based user/project management, login, realtime markdown pages, a shared graph workspace, and a standalone timeline.
 
 ## Run locally
 
@@ -8,18 +8,33 @@ A minimal Flask collaboration app with secure account creation, login, realtime 
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+python manage_users.py create yourusername yourpassword
 python run.py
 ```
 
 Open `http://127.0.0.1:5000`.
 
-## Notes
+## User Management
 
-- User passwords are stored with Werkzeug password hashing.
-- Runtime data is stored in `instance/redteam_obsidian.sqlite`.
-- `Notes` is the Obsidian-style markdown workspace with a page list, live editor, and live preview.
-- Each graph node has its own full page at `/nodes/<id>` with realtime markdown editing.
-- `Graph` is a full-page node map. Drag nodes to move them, drag a node handle onto another node to connect them, and right-drag empty graph space to pan.
-- `Timeline` is a standalone full-page event log.
-- Realtime collaboration uses Flask-SocketIO in threading mode. Timeline events, graph nodes, graph edits, node markdown edits, and node links are broadcast to connected users.
-- Change `SECRET_KEY` in `app/__init__.py` before using outside local development.
+Account creation is handled via the command line:
+
+- **Create a user:** `python manage_users.py create <username> <password>`
+- **List users:** `python manage_users.py list`
+- **Delete a user:** `python manage_users.py delete <username>`
+
+## Project Management
+
+RedObsidian supports multiple concurrent projects. Manage them via `manage_projects.py`:
+
+- **List projects:** `python manage_projects.py list`
+- **Export a project:** `python manage_projects.py export <project_name> <output_file.zip> --password <password>`
+- **Import a project:** `python manage_projects.py import <input_file.zip> --password <password> [--name <new_name>]`
+
+You can also create and switch projects directly in the web UI via the **Projects** navigation link.
+
+## Security Notes
+
+- **Authentication Required:** All routes and assets require a valid login.
+- **Project Isolation:** Data and uploads are strictly isolated between projects.
+- **Uploads:** Files are stored in `instance/uploads/<project_id>/` and served through an authenticated route.
+- **Secret Key:** Change `SECRET_KEY` in `app/__init__.py` before using outside local development.

@@ -11,6 +11,54 @@ const state = {
   zoom: 1,
 };
 
+const history = {
+  undoStack: [],
+  redoStack: [],
+  isUndoing: false,
+  lastActionTime: 0,
+  push(undoFn, redoFn) {
+    if (this.isUndoing) return;
+    this.undoStack.push({ undo: undoFn, redo: redoFn });
+    this.redoStack = [];
+    if (this.undoStack.length > 200) this.undoStack.shift();
+  },
+  async undo() {
+    const action = this.undoStack.pop();
+    if (action) {
+      this.isUndoing = true;
+      this.lastActionTime = Date.now();
+      await action.undo();
+      this.redoStack.push(action);
+      this.isUndoing = false;
+      showToast("Undo");
+    }
+  },
+  async redo() {
+    const action = this.redoStack.pop();
+    if (action) {
+      this.isUndoing = true;
+      this.lastActionTime = Date.now();
+      await action.redo();
+      this.undoStack.push(action);
+      this.isUndoing = false;
+      showToast("Redo");
+    }
+  }
+};
+
+window.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    if (e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) history.redo();
+      else history.undo();
+    } else if (e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      history.redo();
+    }
+  }
+});
+
 const page = document.querySelector("[data-page]")?.dataset.page;
 const toast = document.querySelector("#toast");
 
@@ -265,6 +313,8 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
 
   const nodeFilesBlock = document.querySelector("#node-files");
 
+  let lastSavedState = null;
+
   function renderEditor() {
     const node = currentNode();
     if (!node) {
@@ -272,6 +322,7 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
         window.flushPendingSave();
       }
       lastLoadedNodeId = null;
+      lastSavedState = null;
       return;
     }
     
@@ -283,11 +334,22 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
       lastLoadedNodeId = node.id;
     }
 
+    lastSavedState = {
+      id: node.id,
+      title: node.title,
+      caption: node.caption || "",
+      notes: node.notes || "",
+      color: node.color || "",
+      in_graph: node.in_graph
+    };
+
     if (breadcrumb) breadcrumb.innerHTML = nodePath(node).map((item) => escapeHtml(item.title)).join("<span>/</span>");
     
-    if (isNewSelection || document.activeElement !== title) title.value = node.title;
-    if (isNewSelection || document.activeElement !== caption) caption.value = node.caption || "";
-    if (isNewSelection || document.activeElement !== notes) setEditorMarkdown(notes, node.notes || "");
+    const forceUpdate = isNewSelection || (Date.now() - history.lastActionTime < 1000);
+    
+    if (forceUpdate || document.activeElement !== title) title.value = node.title;
+    if (forceUpdate || document.activeElement !== caption) caption.value = node.caption || "";
+    if (forceUpdate || document.activeElement !== notes) setEditorMarkdown(notes, node.notes || "", true);
     
     if (nodeFilesBlock) {
       nodeFilesBlock.innerHTML = (node.files || []).map((file, i) => `
@@ -324,29 +386,63 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
     if (!state.activeNodeId) return;
     const node = state.nodes.find(n => n.id === state.activeNodeId);
     if (!node) return;
-    socket.emit("node:update", {
+
+    const newState = {
       id: node.id,
       title: title.value,
       caption: caption.value,
       notes: editorText(notes),
       color: node.color || "",
       in_graph: node.in_graph,
-    });
-  }, 220);
+    };
+
+    if (lastSavedState && (
+      lastSavedState.title !== newState.title || 
+      lastSavedState.notes !== newState.notes || 
+      lastSavedState.caption !== newState.caption
+    )) {
+      const prevState = { ...lastSavedState };
+      const nextState = { ...newState };
+      history.push(
+        () => socket.emit("node:update", prevState),
+        () => socket.emit("node:update", nextState)
+      );
+    }
+    lastSavedState = { ...newState };
+
+    socket.emit("node:update", newState);
+  }, 600);
 
   const flush = () => {
     if (!lastLoadedNodeId) return;
     const node = state.nodes.find(n => n.id === lastLoadedNodeId);
     if (!node) return;
     save.cancel();
-    socket.emit("node:update", {
+    
+    const newState = {
       id: node.id,
       title: title.value,
       caption: caption.value,
       notes: editorText(notes),
       color: node.color || "",
       in_graph: node.in_graph,
-    });
+    };
+
+    if (lastSavedState && (
+      lastSavedState.title !== newState.title || 
+      lastSavedState.notes !== newState.notes || 
+      lastSavedState.caption !== newState.caption
+    )) {
+      const prevState = { ...lastSavedState };
+      const nextState = { ...newState };
+      history.push(
+        () => socket.emit("node:update", prevState),
+        () => socket.emit("node:update", nextState)
+      );
+    }
+    lastSavedState = { ...newState };
+
+    socket.emit("node:update", newState);
   };
 
   window.cancelPendingSave = () => save.cancel();
@@ -768,13 +864,30 @@ function initTimelinePage() {
     timelineList.querySelectorAll("[data-event-save]").forEach((button) => {
       button.addEventListener("click", () => {
         const id = Number(button.dataset.eventSave);
+        const eventData = state.events.find(e => e.id === id);
+        if (!eventData) return;
+
         const editor = timelineList.querySelector(`[data-event-body="${id}"]`);
-        socket.emit("timeline:update", {
+        const newState = {
           id,
           title: timelineList.querySelector(`[data-event-title="${id}"]`).value,
           body: editorText(editor),
           occurred_at: new Date(timelineList.querySelector(`[data-event-time="${id}"]`).value).toISOString(),
-        });
+        };
+
+        const prevState = {
+          id: eventData.id,
+          title: eventData.title,
+          body: eventData.body,
+          occurred_at: eventData.occurred_at
+        };
+
+        history.push(
+          () => socket.emit("timeline:update", prevState),
+          () => socket.emit("timeline:update", newState)
+        );
+
+        socket.emit("timeline:update", newState);
       });
     });
 
@@ -1025,6 +1138,8 @@ function initGraphPage() {
           pointerId: event.pointerId,
           startX: event.clientX,
           startY: event.clientY,
+          startWorldX: node.x,
+          startWorldY: node.y,
           offsetX: world.x - node.x,
           offsetY: world.y - node.y,
           moved: false,
@@ -1104,6 +1219,11 @@ function initGraphPage() {
     if (targetEdge) {
       menuDeleteLink.onclick = (e) => {
         e.stopPropagation();
+        const edgeState = { ...targetEdge };
+        history.push(
+          () => socket.emit("edge:create", { source_id: edgeState.source_id, target_id: edgeState.target_id }),
+          () => socket.emit("edge:delete", { id: edgeState.id })
+        );
         socket.emit("edge:delete", { id: targetEdge.id });
         contextMenu.hidden = true;
         document.removeEventListener("pointerdown", cleanup);
@@ -1170,7 +1290,17 @@ function initGraphPage() {
         .map((element) => element.closest?.(".graph-node"))
         .find((element) => element && Number(element.dataset.nodeId) !== done.node.id);
       const targetId = Number(targetElement?.dataset.nodeId);
-      if (targetId) socket.emit("edge:create", { source_id: done.node.id, target_id: targetId });
+      if (targetId) {
+        const edgeData = { source_id: done.node.id, target_id: targetId };
+        history.push(
+          () => {
+            const edge = state.edges.find(e => e.source_id === edgeData.source_id && e.target_id === edgeData.target_id);
+            if (edge) socket.emit("edge:delete", { id: edge.id });
+          },
+          () => socket.emit("edge:create", edgeData)
+        );
+        socket.emit("edge:create", edgeData);
+      }
     }
   });
 

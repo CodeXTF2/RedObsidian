@@ -8,7 +8,7 @@ from sqlalchemy import inspect, text
 
 db = SQLAlchemy()
 login_manager = LoginManager()
-socketio = SocketIO(cors_allowed_origins=[], async_mode="threading")
+socketio = SocketIO(cors_allowed_origins=[], async_mode="eventlet")
 
 
 def create_app():

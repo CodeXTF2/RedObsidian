@@ -2,7 +2,7 @@
 
 A minimal Flask collaboration app with a multi-project system, CLI-based user/project management, login, realtime markdown pages, a shared graph workspace, and a standalone timeline.
 
-## Run locally
+## Run Locally (Development)
 
 ```powershell
 python -m venv .venv
@@ -13,6 +13,23 @@ python run.py
 ```
 
 Open `http://127.0.0.1:5000`.
+
+## Run in Production
+
+RedObsidian uses Flask-SocketIO for realtime collaboration, which requires an asynchronous worker class when run in production.
+
+**Cross-Platform (Windows / Linux / macOS):**
+Because Gunicorn does not support Windows natively, the simplest cross-platform production setup uses Eventlet's built-in WSGI server. Run the `wsgi.py` file directly:
+```bash
+python wsgi.py
+```
+*Note: Under the hood, `Flask-SocketIO` detects `eventlet` and automatically starts a production-ready WSGI server listening on `0.0.0.0:5000`.*
+
+**On Linux/macOS (Alternative using Gunicorn):**
+```bash
+gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:5000 wsgi:app
+```
+
 
 ## User Management
 

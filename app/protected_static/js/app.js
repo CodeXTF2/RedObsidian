@@ -159,14 +159,25 @@ function markdownToLiveHtml(markdown) {
   if (!lines.length || (lines.length === 1 && lines[0] === "")) {
     return '<div class="md-line md-empty"><br></div>';
   }
-  let inCode = false;
-  return lines.map((line) => {
-    if (line.startsWith("```")) {
-      inCode = !inCode;
-      return `<div class="md-line md-code-toggle">${escapeHtml(line) || "<br>"}</div>`;
+  let codeFence = null;
+  return lines.map((line, index) => {
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence && (!codeFence || fence[1][0] === codeFence.marker)) {
+      if (!codeFence) {
+        codeFence = { marker: fence[1][0], length: fence[1].length };
+        return `<div class="md-line md-code md-code-fence md-code-first">${escapeHtml(line) || "<br>"}</div>`;
+      }
+
+      if (fence[1].length >= codeFence.length && !fence[2].trim()) {
+        codeFence = null;
+        return `<div class="md-line md-code md-code-fence md-code-last">${escapeHtml(line) || "<br>"}</div>`;
+      }
     }
-    if (inCode) {
-      return `<div class="md-line md-code">${escapeHtml(line) || "<br>"}</div>`;
+    if (codeFence) {
+      const nextLine = lines[index + 1] || "";
+      const nextFence = nextLine.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      const isBeforeClose = nextFence && nextFence[1][0] === codeFence.marker && nextFence[1].length >= codeFence.length && !nextFence[2].trim();
+      return `<div class="md-line md-code ${isBeforeClose ? "md-code-before-last" : "md-code-middle"}">${escapeHtml(line) || "<br>"}</div>`;
     }
     const heading = line.match(/^(#{1,6})(\s.*)?$/);
     if (heading) {

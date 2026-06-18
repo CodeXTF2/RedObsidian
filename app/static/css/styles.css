@@ -643,6 +643,26 @@ a {
   color: #d7d7d7;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   padding: 0 0.35rem;
+  white-space: pre-wrap;
+}
+
+.md-code-first {
+  border-radius: 6px 6px 0 0;
+  color: var(--muted);
+  margin-top: 0.45rem;
+  padding-top: 0.35rem;
+}
+
+.md-code-middle,
+.md-code-before-last {
+  border-radius: 0;
+}
+
+.md-code-last {
+  border-radius: 0 0 6px 6px;
+  color: var(--muted);
+  margin-bottom: 0.45rem;
+  padding-bottom: 0.35rem;
 }
 
 .live-markdown-editor code {

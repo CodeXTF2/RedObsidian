@@ -1048,7 +1048,7 @@ a {
 .timeline-time-row {
   display: grid;
   gap: 0.5rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   align-items: end;
 }
 

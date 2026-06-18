@@ -885,11 +885,13 @@ function initTimelinePage() {
         if (!eventData) return;
 
         const editor = timelineList.querySelector(`[data-event-body="${id}"]`);
+        const timeValue = timelineList.querySelector(`[data-event-time="${id}"]`).value;
+        const localDate = new Date(timeValue);
         const newState = {
           id,
           title: timelineList.querySelector(`[data-event-title="${id}"]`).value,
           body: editorText(editor),
-          occurred_at: new Date(timelineList.querySelector(`[data-event-time="${id}"]`).value).toISOString(),
+          occurred_at: localDate.toISOString(),
         };
 
         const prevState = {
@@ -921,10 +923,12 @@ function initTimelinePage() {
   }
   timelineForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    const timeValue = eventTime.value;
+    const localDate = new Date(timeValue);
     socket.emit("timeline:create", {
       title: eventTitle.value,
       body: editorText(eventBody),
-      occurred_at: new Date(eventTime.value).toISOString(),
+      occurred_at: localDate.toISOString(),
     });
     timelineForm.reset();
     eventBody.innerHTML = "";

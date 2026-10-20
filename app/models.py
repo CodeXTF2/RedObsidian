@@ -104,6 +104,8 @@ class GraphNode(db.Model):
     y = db.Column(db.Float, default=240, nullable=False)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utcnow, onupdate=utcnow, nullable=False)
+    # Set when the page is deleted; kept for a while so the delete can be undone
+    deleted_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
     project = db.relationship("Project")
@@ -138,6 +140,9 @@ class GraphEdge(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("project.id"), nullable=False, index=True)
     source_id = db.Column(db.Integer, db.ForeignKey("graph_node.id"), nullable=False)
     target_id = db.Column(db.Integer, db.ForeignKey("graph_node.id"), nullable=False)
+    # Optional bend point ("joint") of the elbow line, in graph world coordinates
+    joint_x = db.Column(db.Float, nullable=True)
+    joint_y = db.Column(db.Float, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utcnow, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
 
@@ -157,5 +162,7 @@ class GraphEdge(db.Model):
             "project_id": self.project_id,
             "source_id": self.source_id,
             "target_id": self.target_id,
+            "joint_x": self.joint_x,
+            "joint_y": self.joint_y,
             "author": self.user.username,
         }

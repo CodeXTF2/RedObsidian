@@ -1,16 +1,52 @@
 import json
-from flask import session
+from flask import request, session
 from flask_login import current_user
-from flask_socketio import disconnect, emit
+from flask_socketio import disconnect, emit, join_room
 from sqlalchemy.exc import IntegrityError
 
 from . import db
 from .main import parse_iso_datetime
-from .models import GraphEdge, GraphNode, TimelineEvent, as_utc
+from .models import GraphEdge, GraphNode, TimelineEvent, as_utc, utcnow
 
 
 def get_current_project_id():
     return session.get("project_id")
+
+
+def project_room(project_id):
+    return f"project:{project_id}"
+
+
+def live_node(node_id, project_id):
+    """A page in this project that hasn't been deleted, or None."""
+    try:
+        node = db.session.get(GraphNode, int(node_id))
+    except (TypeError, ValueError):
+        return None
+    if not node or node.project_id != project_id or node.deleted_at is not None:
+        return None
+    return node
+
+
+def with_origin(data):
+    """Tag a broadcast with the connection and user that caused it, so clients can spot concurrent edits."""
+    return {**data, "origin": request.sid, "edited_by": current_user.username}
+
+
+def live_edges_for(node, project_id):
+    edges = GraphEdge.query.filter_by(project_id=project_id).filter(
+        (GraphEdge.source_id == node.id) | (GraphEdge.target_id == node.id)
+    ).all()
+    return [
+        edge for edge in edges
+        if live_node(edge.source_id, project_id) and live_node(edge.target_id, project_id)
+    ]
+
+
+def parse_joint(value):
+    if value in (None, ""):
+        return None
+    return max(-10000.0, min(10000.0, float(value)))
 
 
 def is_descendant(node_id, possible_parent_id):
@@ -87,7 +123,10 @@ def register_socket_handlers(socketio):
         if not current_user.is_authenticated:
             disconnect()
             return
-        emit("presence", {"message": f"{current_user.username} connected"}, broadcast=True)
+        project_id = get_current_project_id()
+        if project_id:
+            join_room(project_room(project_id))
+            emit("presence", {"message": f"{current_user.username} connected"}, to=project_room(project_id))
 
     @socketio.on("timeline:create")
     def create_timeline_event(payload):
@@ -125,7 +164,7 @@ def register_socket_handlers(socketio):
         event.order_index = automatic_timeline_order(event.occurred_at, project_id)
         db.session.add(event)
         db.session.commit()
-        emit("timeline:created", event.to_dict(), broadcast=True)
+        emit("timeline:created", event.to_dict(), to=project_room(project_id))
 
     @socketio.on("timeline:update")
     def update_timeline_event(payload):
@@ -168,7 +207,7 @@ def register_socket_handlers(socketio):
             return
 
         db.session.commit()
-        emit("timeline:updated", event.to_dict(), broadcast=True)
+        emit("timeline:updated", with_origin(event.to_dict()), to=project_room(project_id))
 
     @socketio.on("timeline:reorder")
     def reorder_timeline_event(payload):
@@ -189,7 +228,7 @@ def register_socket_handlers(socketio):
             return
         event.manual_order = True
         db.session.commit()
-        emit("timeline:updated", event.to_dict(), broadcast=True)
+        emit("timeline:updated", with_origin(event.to_dict()), to=project_room(project_id))
 
     @socketio.on("timeline:auto_sort")
     def auto_sort_timeline_events():
@@ -200,7 +239,7 @@ def register_socket_handlers(socketio):
 
         events = reset_timeline_auto_order(project_id)
         db.session.commit()
-        emit("timeline:reset", {"events": [event.to_dict() for event in events]}, broadcast=True)
+        emit("timeline:reset", {"events": [event.to_dict() for event in events]}, to=project_room(project_id))
 
     @socketio.on("timeline:delete")
     def delete_timeline_event(payload):
@@ -218,7 +257,7 @@ def register_socket_handlers(socketio):
         try:
             db.session.delete(event)
             db.session.commit()
-            emit("timeline:deleted", {"id": event_id}, broadcast=True)
+            emit("timeline:deleted", {"id": event_id}, to=project_room(project_id))
         except Exception as e:
             db.session.rollback()
             emit("error:message", {"message": f"Deletion failed: {str(e)}"})
@@ -232,11 +271,9 @@ def register_socket_handlers(socketio):
 
         title = (payload or {}).get("title", "").strip() or "Untitled node"
         parent_id = (payload or {}).get("parent_id")
-        if parent_id:
-            parent = db.session.get(GraphNode, int(parent_id))
-            if not parent or parent.project_id != project_id:
-                emit("error:message", {"message": "Parent page not found."})
-                return
+        if parent_id and not live_node(parent_id, project_id):
+            emit("error:message", {"message": "Parent page not found."})
+            return
 
         node = GraphNode(
             project_id=project_id,
@@ -253,7 +290,8 @@ def register_socket_handlers(socketio):
         )
         db.session.add(node)
         db.session.commit()
-        emit("node:created", node.to_dict(), broadcast=True)
+        emit("node:created", node.to_dict(), to=project_room(project_id))
+        return node.to_dict()
 
     @socketio.on("node:update")
     def update_node(payload):
@@ -262,9 +300,9 @@ def register_socket_handlers(socketio):
             disconnect()
             return
 
-        node = db.session.get(GraphNode, (payload or {}).get("id"))
-        if not node or node.project_id != project_id:
-            emit("error:message", {"message": "Node not found."})
+        node = live_node((payload or {}).get("id"), project_id)
+        if not node:
+            emit("error:message", {"message": "This page no longer exists."})
             return
 
         for field, limit in (("title", 120), ("caption", 280), ("notes", None), ("color", 20)):
@@ -288,11 +326,9 @@ def register_socket_handlers(socketio):
             if parent_id and is_descendant(node.id, int(parent_id)):
                 emit("error:message", {"message": "A page cannot be moved inside its own child."})
                 return
-            if parent_id:
-                parent = db.session.get(GraphNode, int(parent_id))
-                if not parent or parent.project_id != project_id:
-                    emit("error:message", {"message": "Parent page not found."})
-                    return
+            if parent_id and not live_node(parent_id, project_id):
+                emit("error:message", {"message": "Parent page not found."})
+                return
             node.parent_id = int(parent_id) if parent_id else None
 
         if "order_index" in payload:
@@ -304,7 +340,7 @@ def register_socket_handlers(socketio):
             node.y = float(payload["y"])
 
         db.session.commit()
-        emit("node:updated", node.to_dict(), broadcast=True)
+        emit("node:updated", with_origin(node.to_dict()), to=project_room(project_id))
 
     @socketio.on("node:delete")
     def delete_node(payload):
@@ -314,38 +350,70 @@ def register_socket_handlers(socketio):
             return
 
         node_id = (payload or {}).get("id")
-        node = db.session.get(GraphNode, node_id)
-        if not node or node.project_id != project_id:
+        node = live_node(node_id, project_id)
+        if not node:
             emit("error:message", {"message": f"Node {node_id} not found."})
             return
 
         try:
-            # Handle children: re-parent to parent of deleted node or null
+            # Children move up a level; node:restore moves them back
             new_parent_id = node.parent_id
             for child in node.children:
-                child.parent_id = new_parent_id
+                if child.deleted_at is None:
+                    child.parent_id = new_parent_id
 
-            # Delete edges
-            GraphEdge.query.filter_by(project_id=project_id).filter((GraphEdge.source_id == node.id) | (GraphEdge.target_id == node.id)).delete()
-
-            db.session.delete(node)
+            # Soft delete: links are kept (but hidden) so an undo restores them too
+            node.deleted_at = utcnow()
             db.session.commit()
-            emit("node:deleted", {"id": node_id}, broadcast=True)
+            emit("node:deleted", {"id": node.id}, to=project_room(project_id))
 
             # Ensure at least one page exists
-            if GraphNode.query.filter_by(project_id=project_id).count() == 0:
+            if GraphNode.query.filter_by(project_id=project_id, deleted_at=None).count() == 0:
                 new_node = GraphNode(
                     project_id=project_id,
-                    title="Untitled",
+                    title="Untitled page",
                     in_graph=False,
                     user_id=current_user.id
                 )
                 db.session.add(new_node)
                 db.session.commit()
-                emit("node:created", new_node.to_dict(), broadcast=True)
+                emit("node:created", new_node.to_dict(), to=project_room(project_id))
         except Exception as e:
             db.session.rollback()
             emit("error:message", {"message": f"Deletion failed: {str(e)}"})
+
+    @socketio.on("node:restore")
+    def restore_node(payload):
+        project_id = get_current_project_id()
+        if not current_user.is_authenticated or not project_id:
+            disconnect()
+            return
+
+        try:
+            node = db.session.get(GraphNode, int((payload or {}).get("id")))
+        except (TypeError, ValueError):
+            node = None
+        if not node or node.project_id != project_id or node.deleted_at is None:
+            emit("error:message", {"message": "That page can no longer be restored."})
+            return
+
+        node.deleted_at = None
+        if node.parent_id and not live_node(node.parent_id, project_id):
+            node.parent_id = None
+        # Move children back, unless someone has rearranged them since
+        restored_children = []
+        for child_id in (payload or {}).get("children") or []:
+            child = live_node(child_id, project_id)
+            if child and child.parent_id == node.parent_id:
+                child.parent_id = node.id
+                restored_children.append(child)
+        db.session.commit()
+
+        emit("node:restored", {
+            "node": node.to_dict(),
+            "children": [child.to_dict() for child in restored_children],
+            "edges": [edge.to_dict() for edge in live_edges_for(node, project_id)],
+        }, to=project_room(project_id))
 
     @socketio.on("edge:create")
     def create_edge(payload):
@@ -360,13 +428,26 @@ def register_socket_handlers(socketio):
             emit("error:message", {"message": "Choose two different nodes."})
             return
 
-        source = db.session.get(GraphNode, source_id)
-        target = db.session.get(GraphNode, target_id)
-        if not source or not target or source.project_id != project_id or target.project_id != project_id:
+        source = live_node(source_id, project_id)
+        target = live_node(target_id, project_id)
+        if not source or not target:
             emit("error:message", {"message": "Both nodes must exist."})
             return
 
-        edge = GraphEdge(project_id=project_id, source_id=source_id, target_id=target_id, user_id=current_user.id)
+        try:
+            joint_x = parse_joint((payload or {}).get("joint_x"))
+            joint_y = parse_joint((payload or {}).get("joint_y"))
+        except (TypeError, ValueError):
+            joint_x = joint_y = None
+
+        edge = GraphEdge(
+            project_id=project_id,
+            source_id=source_id,
+            target_id=target_id,
+            joint_x=joint_x,
+            joint_y=joint_y,
+            user_id=current_user.id,
+        )
         db.session.add(edge)
         try:
             db.session.commit()
@@ -375,7 +456,32 @@ def register_socket_handlers(socketio):
             emit("error:message", {"message": "Those nodes are already linked."})
             return
 
-        emit("edge:created", edge.to_dict(), broadcast=True)
+        emit("edge:created", edge.to_dict(), to=project_room(project_id))
+
+    @socketio.on("edge:update")
+    def update_edge(payload):
+        project_id = get_current_project_id()
+        if not current_user.is_authenticated or not project_id:
+            disconnect()
+            return
+
+        edge = db.session.get(GraphEdge, (payload or {}).get("id"))
+        if not edge or edge.project_id != project_id:
+            emit("error:message", {"message": "Link not found."})
+            return
+
+        try:
+            if "joint_x" in payload:
+                edge.joint_x = parse_joint(payload.get("joint_x"))
+            if "joint_y" in payload:
+                edge.joint_y = parse_joint(payload.get("joint_y"))
+        except (TypeError, ValueError):
+            db.session.rollback()
+            emit("error:message", {"message": "Link position is invalid."})
+            return
+
+        db.session.commit()
+        emit("edge:updated", edge.to_dict(), to=project_room(project_id))
 
     @socketio.on("edge:delete")
     def delete_edge(payload):
@@ -392,4 +498,4 @@ def register_socket_handlers(socketio):
 
         db.session.delete(edge)
         db.session.commit()
-        emit("edge:deleted", {"id": edge_id}, broadcast=True)
+        emit("edge:deleted", {"id": edge_id}, to=project_room(project_id))

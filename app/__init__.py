@@ -1,29 +1,77 @@
+import os
+import secrets
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, flash, jsonify, redirect, request, url_for
 from flask_login import LoginManager
 from flask_socketio import SocketIO
 from flask_sqlalchemy import SQLAlchemy
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from sqlalchemy import inspect, text
 
 db = SQLAlchemy()
 login_manager = LoginManager()
-socketio = SocketIO(cors_allowed_origins=[], async_mode="gevent")
+csrf = CSRFProtect()
+socketio = SocketIO(async_mode="gevent")
+
+# Soft-deleted pages are kept this long so they can be restored with undo
+DELETED_NODE_RETENTION = timedelta(days=30)
+
+
+def load_secret_key(instance_path):
+    """Use REDOBSIDIAN_SECRET_KEY if set, otherwise a random key persisted in the instance folder."""
+    env_key = os.environ.get("REDOBSIDIAN_SECRET_KEY")
+    if env_key:
+        return env_key
+    key_file = Path(instance_path) / "secret_key"
+    if key_file.exists():
+        return key_file.read_text(encoding="utf-8").strip()
+    key = secrets.token_hex(32)
+    key_file.write_text(key, encoding="utf-8")
+    try:
+        key_file.chmod(0o600)
+    except OSError:
+        pass
+    return key
+
+
+def allowed_socket_origins():
+    """Same-origin only by default. REDOBSIDIAN_ALLOWED_ORIGINS adds a comma-separated allowlist (e.g. behind a proxy)."""
+    value = os.environ.get("REDOBSIDIAN_ALLOWED_ORIGINS", "").strip()
+    if not value:
+        return None
+    return [origin.strip().rstrip("/") for origin in value.split(",") if origin.strip()]
 
 
 def create_app():
     app = Flask(__name__, instance_relative_config=True)
+    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
     app.config.from_mapping(
-        SECRET_KEY="dev-change-me",
+        SECRET_KEY=load_secret_key(app.instance_path),
         SQLALCHEMY_DATABASE_URI=f"sqlite:///{Path(app.instance_path) / 'redteam_obsidian.sqlite'}",
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        REMEMBER_COOKIE_HTTPONLY=True,
+        REMEMBER_COOKIE_SAMESITE="Lax",
+        # Tokens live as long as the session, so long-open tabs can still upload
+        WTF_CSRF_TIME_LIMIT=None,
     )
-
-    Path(app.instance_path).mkdir(parents=True, exist_ok=True)
+    if os.environ.get("REDOBSIDIAN_SECURE_COOKIES") == "1":
+        app.config.update(SESSION_COOKIE_SECURE=True, REMEMBER_COOKIE_SECURE=True)
 
     db.init_app(app)
     login_manager.init_app(app)
-    socketio.init_app(app)
+    csrf.init_app(app)
+    socketio.init_app(app, cors_allowed_origins=allowed_socket_origins())
+
+    @app.errorhandler(CSRFError)
+    def handle_csrf_error(error):
+        if request.path.startswith("/api/"):
+            return jsonify({"error": "Your session expired. Reload the page and try again."}), 400
+        flash("Your session expired. Please try again.", "error")
+        return redirect(request.referrer or url_for("main.index"))
 
     login_manager.login_view = "auth.login"
     login_manager.login_message_category = "error"
@@ -71,18 +119,6 @@ def ensure_schema():
     default_project = Project.query.first()
     default_project_id = default_project.id if default_project else None
 
-    # Ensure all projects have at least one page
-    for project in Project.query.all():
-        if GraphNode.query.filter_by(project_id=project.id).count() == 0:
-            initial_node = GraphNode(
-                project_id=project.id,
-                title="Untitled",
-                in_graph=False,
-                user_id=project.created_by_id
-            )
-            db.session.add(initial_node)
-    db.session.commit()
-
     # Update other tables
     for table_name in ["timeline_event", "graph_node", "graph_edge"]:
         if table_name in table_names:
@@ -120,3 +156,45 @@ def ensure_schema():
         if "ended_at" not in timeline_columns:
             db.session.execute(text("ALTER TABLE timeline_event ADD COLUMN ended_at DATETIME"))
             db.session.commit()
+
+    if "graph_node" in table_names:
+        graph_node_columns = {column["name"] for column in inspector.get_columns("graph_node")}
+        if "deleted_at" not in graph_node_columns:
+            db.session.execute(text("ALTER TABLE graph_node ADD COLUMN deleted_at DATETIME"))
+            db.session.commit()
+
+    if "graph_edge" in table_names:
+        graph_edge_columns = {column["name"] for column in inspector.get_columns("graph_edge")}
+        for column in ("joint_x", "joint_y"):
+            if column not in graph_edge_columns:
+                db.session.execute(text(f"ALTER TABLE graph_edge ADD COLUMN {column} FLOAT"))
+                db.session.commit()
+
+    purge_deleted_nodes()
+
+    # Ensure all projects have at least one page (runs after migrations so the
+    # GraphNode query only touches columns that exist)
+    for project in Project.query.all():
+        if GraphNode.query.filter_by(project_id=project.id, deleted_at=None).count() == 0:
+            initial_node = GraphNode(
+                project_id=project.id,
+                title="Untitled page",
+                in_graph=False,
+                user_id=project.created_by_id
+            )
+            db.session.add(initial_node)
+    db.session.commit()
+
+
+def purge_deleted_nodes():
+    from .models import GraphEdge, GraphNode
+
+    cutoff = datetime.now(timezone.utc) - DELETED_NODE_RETENTION
+    expired = GraphNode.query.filter(GraphNode.deleted_at.isnot(None), GraphNode.deleted_at < cutoff).all()
+    if not expired:
+        return
+    expired_ids = [node.id for node in expired]
+    GraphEdge.query.filter(GraphEdge.source_id.in_(expired_ids) | GraphEdge.target_id.in_(expired_ids)).delete(synchronize_session=False)
+    GraphNode.query.filter(GraphNode.parent_id.in_(expired_ids)).update({"parent_id": None}, synchronize_session=False)
+    GraphNode.query.filter(GraphNode.id.in_(expired_ids)).delete(synchronize_session=False)
+    db.session.commit()

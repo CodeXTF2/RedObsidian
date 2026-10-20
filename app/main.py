@@ -72,7 +72,7 @@ def create_project():
     # Create initial Untitled page
     initial_node = GraphNode(
         project_id=project.id,
-        title="Untitled",
+        title="Untitled page",
         in_graph=False,
         user_id=current_user.id
     )
@@ -95,6 +95,8 @@ def select_project(project_id):
 @login_required
 def delete_project(project_id):
     project = Project.query.get_or_404(project_id)
+    if project.created_by_id != current_user.id:
+        abort(403)
     confirm_name = request.form.get("confirm_name", "").strip()
     
     if confirm_name != project.name:
@@ -164,6 +166,8 @@ def timeline():
 @login_required
 def node_page(node_id):
     node = GraphNode.query.get_or_404(node_id)
+    if node.deleted_at is not None:
+        abort(404)
     if node.project_id != get_current_project_id():
         abort(403)
     return render_template("node.html", active_page="notes", node_id=node.id)
@@ -177,8 +181,12 @@ def state():
         return jsonify({"error": "No project selected"}), 400
         
     events = TimelineEvent.query.filter_by(project_id=project_id).order_by(TimelineEvent.order_index.asc()).all()
-    nodes = GraphNode.query.filter_by(project_id=project_id).order_by(GraphNode.id.asc()).all()
-    edges = GraphEdge.query.filter_by(project_id=project_id).order_by(GraphEdge.id.asc()).all()
+    nodes = GraphNode.query.filter_by(project_id=project_id, deleted_at=None).order_by(GraphNode.id.asc()).all()
+    live_ids = {node.id for node in nodes}
+    edges = [
+        edge for edge in GraphEdge.query.filter_by(project_id=project_id).order_by(GraphEdge.id.asc()).all()
+        if edge.source_id in live_ids and edge.target_id in live_ids
+    ]
     return jsonify(
         {
             "user": current_user.username,

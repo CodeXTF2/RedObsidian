@@ -6,17 +6,26 @@
     <div class="graph-toolbar">
       <h1>Graph</h1>
       <div class="graph-toolbar-actions">
-        <button id="zoom-out" type="button">-</button>
-        <span id="zoom-level">100%</span>
-        <button id="zoom-in" type="button">+</button>
-        <button id="zoom-fit" type="button">Fit</button>
-        <button id="add-node" type="button">New node</button>
+        <div class="zoom-group" role="group" aria-label="Zoom">
+          <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">&minus;</button>
+          <span id="zoom-level">100%</span>
+          <button id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
+        </div>
+        <button id="zoom-fit" type="button" title="Fit all nodes in view">Fit</button>
+        <button id="add-node" class="primary-button" type="button">New node</button>
       </div>
     </div>
     <div id="graph-canvas" class="graph-canvas graph-canvas-full">
       <svg id="edge-layer" aria-hidden="true"></svg>
       <svg id="draft-layer" aria-hidden="true"></svg>
       <div id="node-layer"></div>
+      <div id="graph-empty" class="graph-empty" hidden>
+        <strong>No nodes in the graph yet</strong>
+        <span>Double-click the canvas or use <em>New node</em> to add one.</span>
+      </div>
+      <div class="graph-hint" aria-hidden="true">
+        Hover a node and drag a side dot to link &middot; Drag a line's joint to bend it &middot; Right-drag to pan &middot; Scroll to zoom
+      </div>
     </div>
   </section>
   <aside id="graph-node-panel" class="document-shell graph-node-panel" hidden>
@@ -41,8 +50,11 @@
     </form>
   </aside>
   <div id="graph-context-menu" class="context-menu" hidden>
-    <button type="button" id="menu-new-node">New node</button>
-    <button type="button" id="menu-delete-node" class="danger">Delete node</button>
+    <button type="button" id="menu-new-node">New node here</button>
+    <button type="button" id="menu-open-node">Open as page</button>
+    <button type="button" id="menu-reset-link">Reset bend</button>
+    <button type="button" id="menu-remove-node">Remove from graph</button>
+    <button type="button" id="menu-delete-node" class="danger">Delete page</button>
     <button type="button" id="menu-delete-link" class="danger">Delete link</button>
   </div>
 </main>

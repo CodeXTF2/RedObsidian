@@ -112,7 +112,7 @@
     transition: all 0.15s ease;
   }
 
-  .btn-delete:hover {
+  .btn-delete:hover:not(:disabled) {
     background: var(--danger);
     color: white;
   }
@@ -149,6 +149,15 @@
     <header>
       <h1 class="brand brand-large" style="margin-bottom: 0.5rem;">Projects</h1>
       <p class="eyebrow" style="margin-bottom: 0;">Select a project to continue</p>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack" style="margin-top: 1rem;">
+            {% for category, message in messages %}
+              <p class="flash {{ category }}">{{ message }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
     </header>
 
     <div class="project-grid">
@@ -166,7 +175,11 @@
 
             <div class="project-card-actions">
               <a href="{{ url_for('main.select_project', project_id=project.id) }}" class="btn-select">Open Project</a>
+              {% if project.created_by_id == current_user.id %}
               <button onclick='showDeleteDialog("{{ project.id }}", {{ project.name | tojson | forceescape }})' class="btn-delete">Delete</button>
+              {% else %}
+              <button class="btn-delete" disabled title="Only {{ project.created_by.username }} (the project's creator) can delete it">Delete</button>
+              {% endif %}
             </div>
           </div>
         {% endfor %}
@@ -182,6 +195,7 @@
     <section class="sidebar-section">
       <h2>New Project</h2>
       <form method="post" action="{{ url_for('main.create_project') }}" class="stack-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="auth-form">
           <span>Project Name</span>
           <input name="name" required placeholder="Project name..." maxlength="120">
@@ -196,6 +210,7 @@
 
     <section class="sidebar-section" style="margin-top: auto;">
       <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="ghost-button" type="submit" style="width: 100%; padding: 0.75rem; border-color: var(--line); color: var(--muted);">Sign Out</button>
       </form>
     </section>
@@ -208,6 +223,7 @@
         <h2 style="color: var(--danger); margin-bottom: 0.5rem;">Delete Project?</h2>
         <p id="delete-warning" style="color: var(--muted); font-size: 0.92rem; margin-bottom: 2rem; line-height: 1.5;"></p>
         <form id="delete-form" method="post" class="stack-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label class="auth-form">
                 <span>Type the project name to confirm:</span>
                 <input id="delete-confirm-input" name="confirm_name" required autocomplete="off" placeholder="Confirm project name..." style="border-color: var(--danger); background: rgba(255, 123, 114, 0.05);">

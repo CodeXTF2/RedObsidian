@@ -16,11 +16,17 @@ def export_project(project_name, output_file, password):
             print(f"Error: Project '{project_name}' not found.")
             return False
         
+        # Soft-deleted pages (and links to them) are not exported
+        nodes = GraphNode.query.filter_by(project_id=project.id, deleted_at=None).all()
+        live_ids = {n.id for n in nodes}
         data = {
             "project": project.to_dict(),
             "timeline_events": [e.to_dict() for e in TimelineEvent.query.filter_by(project_id=project.id).all()],
-            "graph_nodes": [n.to_dict() for n in GraphNode.query.filter_by(project_id=project.id).all()],
-            "graph_edges": [e.to_dict() for e in GraphEdge.query.filter_by(project_id=project.id).all()],
+            "graph_nodes": [n.to_dict() for n in nodes],
+            "graph_edges": [
+                e.to_dict() for e in GraphEdge.query.filter_by(project_id=project.id).all()
+                if e.source_id in live_ids and e.target_id in live_ids
+            ],
         }
         
         # We'll use a ZIP file to bundle JSON and uploads
@@ -137,6 +143,8 @@ def import_project(input_file, password, new_name=None):
                             project_id=project.id,
                             source_id=new_source_id,
                             target_id=new_target_id,
+                            joint_x=e_data.get("joint_x"),
+                            joint_y=e_data.get("joint_y"),
                             user_id=owner.id
                         )
                         db.session.add(edge)

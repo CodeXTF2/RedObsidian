@@ -54,4 +54,8 @@ You can also create and switch projects directly in the web UI via the **Project
 - **Authentication Required:** All routes and assets require a valid login.
 - **Project Isolation:** Data and uploads are strictly isolated between projects.
 - **Uploads:** Files are stored in `instance/uploads/<project_id>/` and served through an authenticated route.
-- **Secret Key:** Change `SECRET_KEY` in `app/__init__.py` before using outside local development.
+- **Secret Key:** Set `REDOBSIDIAN_SECRET_KEY` in the environment. If it is not set, a random key is generated on first start and stored in `instance/secret_key` (keep that file private; deleting it logs everyone out).
+- **CSRF:** All forms and state-changing API calls require a CSRF token (Flask-WTF). Session cookies use `SameSite=Lax`; set `REDOBSIDIAN_SECURE_COOKIES=1` when serving over HTTPS.
+- **Realtime origin check:** Websocket connections are accepted from the same origin only. Behind a reverse proxy that changes the host, list the public origin(s) in `REDOBSIDIAN_ALLOWED_ORIGINS` (comma-separated, e.g. `https://notes.example.com`).
+- **Deleting:** Only a project's creator can delete it from the web UI. Deleted pages can be restored with Undo; they are purged permanently after 30 days.
+- **Offline use:** All frontend assets (including the Socket.IO client) are served locally; no CDN access is needed.

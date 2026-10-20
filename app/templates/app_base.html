@@ -17,6 +17,7 @@
       <div id="global-search-results" class="global-search-results" hidden></div>
     </div>
     <form method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="ghost-button" type="submit">Logout</button>
     </form>
   </header>

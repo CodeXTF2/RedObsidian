@@ -703,6 +703,8 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
 
   const nodeFilesBlock = document.querySelector("#node-files");
   const editorForm = document.querySelector("#node-editor");
+  // Vault/page editors tint their container with the page colour (the graph panel handles its own)
+  const tintTarget = editorForm?.closest(".notes-layout > .document-shell, .node-page-layout > .document-shell");
   const TEXT_FIELDS = ["title", "caption", "notes"];
 
   // Last text we know the server has for the loaded node; anything different locally is unsaved
@@ -845,6 +847,11 @@ function initEditorSurface({ fixedNodeId = null } = {}) {
 
     if (addToGraphBtn) {
       addToGraphBtn.hidden = !!node.in_graph;
+    }
+
+    if (tintTarget) {
+      tintTarget.classList.remove("color-red", "color-orange", "color-yellow", "color-green", "color-blue", "color-pink");
+      if (node.color) tintTarget.classList.add(`color-${node.color}`);
     }
 
     if (fixedNodeId) document.title = `${node.title} - RedObsidian`;
@@ -1551,7 +1558,7 @@ function initGraphPage() {
   const NODE_HEIGHT = 84;
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 2.5;
-  const ARROW_LENGTH = 10;
+  const ARROW_LENGTH = 13;
   const CORNER_RADIUS = 10;
   const JOINT_SNAP_PX = 8;
 
@@ -1696,7 +1703,7 @@ function initGraphPage() {
 
   function arrowPath(tip, dir) {
     const base = { x: tip.x - dir.x * ARROW_LENGTH, y: tip.y - dir.y * ARROW_LENGTH };
-    const half = ARROW_LENGTH * 0.55;
+    const half = ARROW_LENGTH * 0.6;
     return `M ${tip.x} ${tip.y} L ${base.x - dir.y * half} ${base.y + dir.x * half} L ${base.x + dir.y * half} ${base.y - dir.x * half} Z`;
   }
 
@@ -1759,13 +1766,13 @@ function initGraphPage() {
 
   function renderGraphEditor() {
     const node = currentNode();
-    graphNodePanel.hidden = !node;
+    // The panel stays in the DOM so it can animate closed; inert keeps it out of tab order meanwhile
+    graphNodePanel.inert = !node;
     document.querySelector(".graph-layout")?.classList.toggle("panel-open", !!node);
 
-    // Clear previous color classes
-    graphNodePanel.classList.remove("color-red", "color-orange", "color-yellow", "color-green", "color-blue", "color-pink");
-
+    // Keep the last colour while closing so the accent doesn't flash
     if (node) {
+      graphNodePanel.classList.remove("color-red", "color-orange", "color-yellow", "color-green", "color-blue", "color-pink");
       if (node.color) graphNodePanel.classList.add(`color-${node.color}`);
     }
     // Always call so a deselected node's pending edits get flushed

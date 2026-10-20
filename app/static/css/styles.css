@@ -756,10 +756,15 @@ a {
   outline: none;
 }
 
-.live-markdown-editor:empty::before {
+/* An empty editor still holds one blank .md-line, so match that too. Absolutely positioned
+   with no offsets, the placeholder sits where the text would start without taking up space,
+   so the caret stays at the beginning of the line. */
+.live-markdown-editor:empty::before,
+.live-markdown-editor:has(> .md-line.md-empty:only-child)::before {
   color: var(--faint);
   content: attr(data-placeholder);
   pointer-events: none;
+  position: absolute;
 }
 
 .title-input::placeholder,
@@ -849,13 +854,16 @@ a {
 }
 
 .graph-layout {
+  --panel-width: max(420px, 48vw);
+  --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 0px;
   min-height: calc(100vh - 44px);
+  transition: grid-template-columns 260ms var(--panel-ease);
 }
 
 .graph-layout.panel-open {
-  grid-template-columns: minmax(0, 1fr) minmax(420px, 48vw);
+  grid-template-columns: minmax(0, 1fr) var(--panel-width);
 }
 
 .graph-page-panel {
@@ -1137,12 +1145,32 @@ a {
 .graph-node.active.color-pink,
 .graph-node.selected.color-pink { box-shadow: 0 0 20px 4px rgba(247, 143, 179, 0.35), 0 0 0 3px #f78fb3, 0 14px 30px rgba(0, 0, 0, 0.38); }
 
+/* The panel's column animates open/closed; its content keeps a fixed width and is
+   anchored to the right edge, so it slides in without reflowing. */
 .graph-node-panel {
-  animation: panel-in 180ms ease-out;
   border-left: 1px solid var(--line);
-  min-height: calc(100vh - 44px);
-  position: relative;
   box-shadow: inset 0 0 0 1.5px #d2a8ff;
+  display: flex;
+  height: calc(100vh - 44px);
+  justify-content: flex-end;
+  min-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  position: relative;
+  transition: opacity 200ms ease, visibility 0s linear 260ms;
+  visibility: hidden;
+}
+
+.panel-open .graph-node-panel {
+  opacity: 1;
+  transition: opacity 160ms ease, visibility 0s;
+  visibility: visible;
+}
+
+.graph-node-panel-inner {
+  flex: 0 0 var(--panel-width);
+  position: relative;
+  width: var(--panel-width);
 }
 
 .graph-node-panel.color-red { box-shadow: inset 0 0 0 1.5px #ff7b72; }
@@ -1852,11 +1880,6 @@ a {
   to { opacity: 1; }
 }
 
-@keyframes panel-in {
-  from { opacity: 0; transform: translateX(12px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-
 @keyframes highlight-fade {
   from { box-shadow: 0 0 0 2px var(--accent-2); }
   to { box-shadow: 0 0 0 2px transparent; }
@@ -1878,6 +1901,15 @@ a {
   .graph-layout.panel-open,
   .timeline-layout {
     grid-template-columns: 1fr;
+  }
+
+  .graph-layout:not(.panel-open) .graph-node-panel {
+    display: none;
+  }
+
+  .graph-node-panel-inner {
+    flex-basis: 100%;
+    width: 100%;
   }
 
   .topbar {
@@ -1976,21 +2008,26 @@ a:focus-visible,
   outline-offset: 1px;
 }
 
+/* Primary actions: flat accent tint, same family as the vault "+", toast actions and "Add to Graph" */
 .primary-button,
 .graph-toolbar .primary-button,
-.viewer-btn {
-  background: linear-gradient(180deg, #dcb9ff, var(--accent-strong));
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 4px 14px rgba(180, 124, 255, 0.25);
-  color: #1a0f2a;
+.viewer-btn,
+.timeline-composer .stack-form > button[type="submit"],
+.auth-form button[type="submit"] {
+  background: rgba(210, 168, 255, 0.16);
+  border: 1px solid rgba(210, 168, 255, 0.42);
+  box-shadow: none;
+  color: #ead9ff;
 }
 
 .primary-button:hover,
 .graph-toolbar .primary-button:hover,
-.viewer-btn:hover {
-  background: linear-gradient(180deg, #e6ccff, #c193ff);
-  border-color: rgba(255, 255, 255, 0.28);
-  color: #1a0f2a;
+.viewer-btn:hover,
+.timeline-composer .stack-form > button[type="submit"]:hover,
+.auth-form button[type="submit"]:hover {
+  background: rgba(210, 168, 255, 0.26);
+  border-color: rgba(210, 168, 255, 0.6);
+  color: #f5edff;
 }
 
 .ghost-button {
@@ -2126,15 +2163,20 @@ input[type="datetime-local"] {
   letter-spacing: 0.06em;
 }
 
+/* The plus is drawn with two centred bars; a "+" glyph sits off-centre in its line box */
 .vault-actions .icon-button {
-  background: var(--accent-soft);
+  background-color: var(--accent-soft);
+  background-image: linear-gradient(currentColor, currentColor), linear-gradient(currentColor, currentColor);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 12px 2px, 2px 12px;
   border-color: rgba(210, 168, 255, 0.25);
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 0;
 }
 
 .vault-actions .icon-button:hover {
-  background: rgba(210, 168, 255, 0.24);
+  background-color: rgba(210, 168, 255, 0.24);
 }
 
 /* Rows are neutral; a page's colour shows as a dot, and the active row gets an accent bar */
@@ -2367,11 +2409,16 @@ input[type="datetime-local"] {
 }
 
 .graph-edge {
-  --edge-color: #6f7c8c;
+  --edge-color: #98a6b8;
 }
 
 .graph-edge:hover {
-  --edge-color: #aab6c4;
+  --edge-color: #ced8e4;
+}
+
+/* Arrowheads are a touch brighter than the line so direction reads at a glance */
+.graph-edge .edge-arrow {
+  fill: color-mix(in srgb, var(--edge-color) 70%, #ffffff);
 }
 
 .graph-edge.selected {
@@ -2401,12 +2448,53 @@ input[type="datetime-local"] {
   box-shadow: inset 2px 0 0 var(--panel-accent), -12px 0 32px rgba(0, 0, 0, 0.35);
 }
 
+/* Faint wash of the node's colour; kept very dark so light colours (yellow) stay readable */
+.graph-node-panel .graph-node-panel-inner,
+.notes-layout > .document-shell,
+.node-page-layout > .document-shell {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--panel-accent) 3%, var(--document)) 0%,
+    color-mix(in srgb, var(--panel-accent) 1.5%, var(--document)) 100%);
+}
+
+/* Vault and page editors get the same colour outline as the graph panel. Their content has no
+   background of its own, so an inset shadow shows through and stays put while scrolling. */
+.notes-layout > .document-shell,
+.node-page-layout > .document-shell {
+  --panel-accent: #d2a8ff;
+  box-shadow: inset 0 0 0 2px var(--panel-accent);
+  transition: box-shadow 200ms ease;
+}
+
+.notes-layout > .document-shell.color-red,
+.node-page-layout > .document-shell.color-red { --panel-accent: #ff7b72; }
+.notes-layout > .document-shell.color-orange,
+.node-page-layout > .document-shell.color-orange { --panel-accent: #ffa657; }
+.notes-layout > .document-shell.color-yellow,
+.node-page-layout > .document-shell.color-yellow { --panel-accent: #f2cc60; }
+.notes-layout > .document-shell.color-green,
+.node-page-layout > .document-shell.color-green { --panel-accent: #7ee787; }
+.notes-layout > .document-shell.color-blue,
+.node-page-layout > .document-shell.color-blue { --panel-accent: #79c0ff; }
+.notes-layout > .document-shell.color-pink,
+.node-page-layout > .document-shell.color-pink { --panel-accent: #f78fb3; }
+
 .graph-node-panel.color-red { --panel-accent: #ff7b72; box-shadow: inset 2px 0 0 var(--panel-accent), -12px 0 32px rgba(0, 0, 0, 0.35); }
 .graph-node-panel.color-orange { --panel-accent: #ffa657; box-shadow: inset 2px 0 0 var(--panel-accent), -12px 0 32px rgba(0, 0, 0, 0.35); }
 .graph-node-panel.color-yellow { --panel-accent: #f2cc60; box-shadow: inset 2px 0 0 var(--panel-accent), -12px 0 32px rgba(0, 0, 0, 0.35); }
 .graph-node-panel.color-green { --panel-accent: #7ee787; box-shadow: inset 2px 0 0 var(--panel-accent), -12px 0 32px rgba(0, 0, 0, 0.35); }
 .graph-node-panel.color-blue { --panel-accent: #79c0ff; box-shadow: inset 2px 0 0 var(--panel-accent), -12px 0 32px rgba(0, 0, 0, 0.35); }
 .graph-node-panel.color-pink { --panel-accent: #f78fb3; box-shadow: inset 2px 0 0 var(--panel-accent), -12px 0 32px rgba(0, 0, 0, 0.35); }
+
+/* Colour outline drawn above the scrolling content (an inset shadow would sit underneath it) */
+.graph-node-panel::before {
+  border: 2px solid var(--panel-accent);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
 
 .panel-close {
   background: transparent;
@@ -2433,17 +2521,6 @@ input[type="datetime-local"] {
   color: var(--accent);
   letter-spacing: 0.08em;
   opacity: 0.85;
-}
-
-.timeline-composer .stack-form > button[type="submit"] {
-  background: linear-gradient(180deg, #dcb9ff, var(--accent-strong));
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #1a0f2a;
-  font-weight: 800;
-}
-
-.timeline-composer .stack-form > button[type="submit"]:hover {
-  background: linear-gradient(180deg, #e6ccff, #c193ff);
 }
 
 /* Vertical rail with a dot per event */
@@ -2576,16 +2653,8 @@ input[type="datetime-local"] {
 }
 
 .auth-form button[type="submit"] {
-  background: linear-gradient(180deg, #dcb9ff, var(--accent-strong));
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #1a0f2a;
-  font-weight: 800;
   margin-top: 0.35rem;
   padding: 0.7rem;
-}
-
-.auth-form button[type="submit"]:hover {
-  background: linear-gradient(180deg, #e6ccff, #c193ff);
 }
 
 .empty-state {

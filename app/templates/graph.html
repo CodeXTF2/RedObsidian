@@ -28,7 +28,8 @@
       </div>
     </div>
   </section>
-  <aside id="graph-node-panel" class="document-shell graph-node-panel" hidden>
+  <aside id="graph-node-panel" class="graph-node-panel" inert>
+    <div class="graph-node-panel-inner document-shell">
     <button id="close-panel" class="panel-close" type="button" title="Close panel">&times;</button>
     <form id="node-editor" class="node-editor">
       <input id="node-title" class="title-input" placeholder="Untitled page" maxlength="120">
@@ -46,8 +47,9 @@
         <button id="add-to-graph" class="add-to-graph-btn" type="button" hidden>Add to Graph</button>
       </div>
       <div id="node-files" class="node-files-block"></div>
-      <div id="node-notes" class="live-markdown-editor" contenteditable="true" data-placeholder="Write markdown..."></div>
+      <div id="node-notes" class="live-markdown-editor" contenteditable="true" data-placeholder="Write your notes here (Markdown supported)..."></div>
     </form>
+    </div>
   </aside>
   <div id="graph-context-menu" class="context-menu" hidden>
     <button type="button" id="menu-new-node">New node here</button>

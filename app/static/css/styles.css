@@ -2058,23 +2058,9 @@ input[type="datetime-local"] {
 }
 
 .brand {
-  align-items: center;
   background: linear-gradient(135deg, #ffffff 35%, var(--brand) 100%);
   -webkit-background-clip: text;
   background-clip: text;
-  display: inline-flex;
-  gap: 0.55rem;
-}
-
-/* Small obsidian-shard mark next to the wordmark */
-.topbar .brand::before {
-  background: linear-gradient(135deg, #ff8a8a, #b3263a);
-  border-radius: 3px;
-  box-shadow: 0 0 12px rgba(255, 107, 107, 0.45);
-  content: "";
-  height: 11px;
-  transform: rotate(45deg);
-  width: 11px;
 }
 
 .main-nav a {

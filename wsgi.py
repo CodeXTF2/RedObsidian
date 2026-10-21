@@ -1,14 +1,18 @@
 from gevent import monkey
+
 monkey.patch_all()
 
-from app import create_app, socketio
+import os  # noqa: E402
+
+from app import create_app, socketio  # noqa: E402
+from app.maintenance import start_maintenance  # noqa: E402
 
 app = create_app()
+start_maintenance(app)
 
 if __name__ == "__main__":
-    print("Starting Gevent WSGI server on http://0.0.0.0:5000...")
-    print("Press Ctrl+C to quit.")
-    
-    # Flask-SocketIO natively wraps the app in a Gevent WSGIServer + WebSocketHandler
-    # when async_mode="gevent" is specified.
-    socketio.run(app, host="0.0.0.0", port=5000, log_output=True)
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "5000"))
+    print(f"Starting RedObsidian on http://{host}:{port} (put a TLS reverse proxy in front of it)")
+    # Flask-SocketIO serves the app with gevent's WSGI server and simple-websocket for WebSockets
+    socketio.run(app, host=host, port=port, log_output=True)

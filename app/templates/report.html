@@ -1,0 +1,98 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes, csrf, severity_badge, switch %}
+{% block title %}Report · {{ project.name }}{% endblock %}
+
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container wide">
+    <header class="page-title with-actions">
+      <div>
+        <h1>Report</h1>
+        <p class="muted">Fill in the front matter, then export.{% if project.findings_enabled %} Findings, their evidence pages and screenshots are pulled in automatically.{% endif %}</p>
+      </div>
+    </header>
+    {{ flashes() }}
+
+    <div class="report-layout">
+      <form method="post" action="{{ url_for('findings.save_report', project_id=project.id) }}" class="report-form">
+        {{ csrf() }}
+        <fieldset {% if not can_edit %}disabled{% endif %}>
+        <section class="card">
+          <h2>Cover page</h2>
+          <div class="form-grid two-col">
+            <label class="field span-2">
+              <span class="field-label">Report title</span>
+              <input class="input" name="title" value="{{ report.title or '' }}" placeholder="{{ project.name }} — Security Assessment Report">
+            </label>
+            {% for name, label, placeholder in [
+              ("client", "Client", "ACME Corp"),
+              ("assessment_type", "Assessment type", "External penetration test"),
+              ("start_date", "Testing start", "2026-10-01"),
+              ("end_date", "Testing end", "2026-10-14"),
+              ("version", "Version", "1.0"),
+              ("classification", "Classification", "Confidential"),
+              ("prepared_by", "Prepared by", "Red Team")] %}
+            <label class="field">
+              <span class="field-label">{{ label }}</span>
+              <input class="input" name="{{ name }}" value="{{ report[name] or '' }}" placeholder="{{ placeholder }}" {% if name.endswith('_date') %}type="date"{% endif %}>
+            </label>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Narrative</h2>
+          <p class="field-hint">Markdown supported.</p>
+          {% for name, label, rows in [("executive_summary", "Executive summary", 7), ("scope", "Scope", 4),
+                                       ("methodology", "Methodology", 4), ("conclusion", "Conclusion", 4)] %}
+          <label class="field">
+            <span class="field-label">{{ label }}</span>
+            <textarea class="input md-textarea" name="{{ name }}" rows="{{ rows }}">{{ report[name] or "" }}</textarea>
+          </label>
+          {% endfor %}
+        </section>
+
+        <section class="card">
+          <h2>Options</h2>
+          {% if project.findings_enabled %}{{ switch("include_drafts", report.include_drafts, "Include draft and false-positive findings", "Off by default so unfinished write-ups don't reach the client.") }}{% endif %}
+          {{ switch("include_timeline", report.include_timeline, "Add the activity timeline as an appendix") }}
+        </section>
+        {% if can_edit %}<div class="form-actions sticky-actions"><button type="submit" class="primary-button">Save report details</button></div>{% endif %}
+        </fieldset>
+      </form>
+
+      <aside class="report-side">
+        <section class="card compact">
+          <h2>Export</h2>
+          <p class="field-hint">Save your changes first; exports use the saved details.</p>
+          <div class="button-stack">
+            <a class="button primary-button" href="{{ url_for('findings.report_docx', project_id=project.id) }}">Download Word (.docx)</a>
+            <a class="button" href="{{ url_for('findings.report_preview', project_id=project.id) }}" target="_blank" rel="noopener">Preview / print to PDF</a>
+            <a class="button ghost-button" href="{{ url_for('findings.report_markdown', project_id=project.id) }}">Download Markdown</a>
+          </div>
+          <p class="field-hint">{% if report_template_exists() %}Word exports use your organisation's template.{% else %}Word exports use the built-in layout{% if current_user.is_admin %} — upload a template in <a href="{{ url_for('admin.settings') }}#reports">Administration</a>{% endif %}.{% endif %}</p>
+        </section>
+        {% if not project.findings_enabled %}
+        <section class="card compact">
+          <h2>Findings <span class="beta-tag">Beta</span></h2>
+          <p class="field-hint">Findings are off for this project, so the report has no findings section.{% if project_role == 'owner' %} <a href="{{ url_for('main.project_settings', project_id=project.id) }}#features">Turn them on in Settings</a>.{% endif %}</p>
+        </section>
+        {% else %}
+        <section class="card compact">
+          <h2>Included findings <span class="count">{{ findings|length }}</span></h2>
+          {% if findings %}
+          <ol class="mini-list">
+            {% for finding in findings %}
+              <li><a href="{{ url_for('findings.edit_finding', project_id=project.id, finding_id=finding.id) }}">{{ severity_badge(finding.severity) }} {{ finding.title }}</a></li>
+            {% endfor %}
+          </ol>
+          {% else %}
+          <p class="field-hint">None yet. <a href="{{ url_for('findings.list_findings', project_id=project.id) }}">Add findings</a>{% if not report.include_drafts %} or mark drafts as Open{% endif %}.</p>
+          {% endif %}
+        </section>
+        {% endif %}
+      </aside>
+    </div>
+  </div>
+</main>
+{% endblock %}

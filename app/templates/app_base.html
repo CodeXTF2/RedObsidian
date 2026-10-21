@@ -1,28 +1,90 @@
 {% extends "base.html" %}
+{% from "_macros.html" import flashes, role_badge %}
 
 {% block body %}
-<div class="app-shell">
+<div class="app-shell{% if project and not can_edit %} is-read-only{% endif %}">
   <header class="topbar">
-    <a class="brand" href="{{ url_for('main.notes') }}">RedObsidian</a>
-    <nav class="main-nav" aria-label="Primary">
-      <a class="{{ 'active' if active_page == 'projects' else '' }}" href="{{ url_for('main.projects') }}">Projects</a>
-      <a class="{{ 'active' if active_page == 'notes' else '' }}" href="{{ url_for('main.notes') }}">Vault</a>
-      <a class="{{ 'active' if active_page == 'graph' else '' }}" href="{{ url_for('main.graph') }}">Graph</a>
-      <a class="{{ 'active' if active_page == 'images' else '' }}" href="{{ url_for('main.images') }}">Images</a>
-      <a class="{{ 'active' if active_page == 'files' else '' }}" href="{{ url_for('main.files_page') }}">Files</a>
-      <a class="{{ 'active' if active_page == 'timeline' else '' }}" href="{{ url_for('main.timeline') }}">Timeline</a>
-    </nav>
+    <div class="topbar-left">
+      <details class="menu project-switcher">
+        <summary class="switcher-button" title="Switch project">
+          <span class="switcher-label">{{ project.name if project else "Projects" }}</span>
+          <svg class="caret" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </summary>
+        <div class="menu-panel">
+          <p class="menu-heading">Your projects</p>
+          {% for item in nav_projects[:12] %}
+            <a class="menu-item {% if project and item.id == project.id %}is-current{% endif %}" href="{{ url_for('main.notes', project_id=item.id) }}">{{ item.name }}</a>
+          {% else %}
+            <span class="menu-empty">No projects yet</span>
+          {% endfor %}
+          <div class="menu-divider"></div>
+          <a class="menu-item" href="{{ url_for('main.projects') }}">All projects…</a>
+        </div>
+      </details>
+
+      {% if project %}
+      <nav class="main-nav" aria-label="Project">
+        <a class="{{ 'active' if active_page == 'notes' }}" href="{{ url_for('main.notes', project_id=project.id) }}">Vault</a>
+        <a class="{{ 'active' if active_page == 'graph' }}" href="{{ url_for('main.graph', project_id=project.id) }}">Graph</a>
+        <a class="{{ 'active' if active_page == 'timeline' }}" href="{{ url_for('main.timeline', project_id=project.id) }}">Timeline</a>
+        {% if project.findings_enabled %}
+        <a class="{{ 'active' if active_page == 'findings' }}" href="{{ url_for('findings.list_findings', project_id=project.id) }}">Findings <span class="beta-tag">Beta</span></a>
+        {% endif %}
+        {% if project.report_enabled %}
+        <a class="{{ 'active' if active_page == 'report' }}" href="{{ url_for('findings.report', project_id=project.id) }}">Report <span class="beta-tag">Beta</span></a>
+        {% endif %}
+        <a class="{{ 'active' if active_page == 'files' }}" href="{{ url_for('main.images', project_id=project.id) }}">Files</a>
+        <a class="{{ 'active' if active_page == 'settings' }}" href="{{ url_for('main.project_settings', project_id=project.id) }}">Settings</a>
+      </nav>
+      {% else %}
+      {% if current_user.is_admin %}
+      <nav class="main-nav" aria-label="Primary">
+        <a class="{{ 'active' if active_page == 'admin' }}" href="{{ url_for('admin.users') }}">Administration</a>
+      </nav>
+      {% endif %}
+      {% endif %}
+    </div>
+
+    {% if project %}
     <div class="global-search" role="search">
-      <input id="global-search-input" type="search" autocomplete="off" placeholder="Search project..." aria-label="Search project">
+      <input id="global-search-input" type="search" autocomplete="off" placeholder="Search project…" aria-label="Search project">
       <div id="global-search-results" class="global-search-results" hidden></div>
     </div>
-    <form method="post" action="{{ url_for('auth.logout') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="ghost-button" type="submit">Logout</button>
-    </form>
+    {% else %}
+    <div></div>
+    {% endif %}
+
+    <details class="menu user-menu">
+      <summary class="user-button" title="Account">
+        <span class="avatar" aria-hidden="true">{{ current_user.username[:1]|upper }}</span>
+        <span class="user-name">{{ current_user.username }}</span>
+      </summary>
+      <div class="menu-panel menu-panel-right">
+        <p class="menu-heading">Signed in as <strong>{{ current_user.username }}</strong>{% if current_user.is_admin %} · admin{% endif %}</p>
+        <a class="menu-item" href="{{ url_for('auth.account') }}">Account &amp; security</a>
+        {% if current_user.is_admin %}<a class="menu-item" href="{{ url_for('admin.users') }}">Administration</a>{% endif %}
+        <div class="menu-divider"></div>
+        <form method="post" action="{{ url_for('auth.logout') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="menu-item" type="submit">Sign out</button>
+        </form>
+      </div>
+    </details>
   </header>
+
+  {% if project and project.archived_at %}
+    <div class="notice-bar">This project is archived and read-only.{% if is_owner or project_role == 'owner' %} <a href="{{ url_for('main.project_settings', project_id=project.id) }}#archive">Restore it</a> to make changes.{% endif %}</div>
+  {% elif project and project_role == 'viewer' %}
+    <div class="notice-bar">You have read-only access to this project.</div>
+  {% endif %}
+
   {% block app_body %}{% endblock %}
 </div>
 <div id="toast" class="toast" hidden></div>
-<script src="{{ url_for('main.serve_js') }}" defer></script>
+{% if project %}
+  {# Every project page loads the app so search, live updates and access revocation work everywhere #}
+  <script id="project-context" type="application/json">{{ {"id": project.id, "base": "/p/" ~ project.id, "canEdit": can_edit, "userId": current_user.id, "findingsEnabled": project.findings_enabled}|tojson }}</script>
+  <script src="{{ url_for('static', filename='js/vendor/socket.io.min.js') }}" defer></script>
+  <script type="module" src="{{ url_for('main.serve_js_module', filename='main.js') }}"></script>
+{% endif %}
 {% endblock %}

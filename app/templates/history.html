@@ -1,0 +1,64 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes, time, csrf %}
+{% block title %}History · {{ node.title }}{% endblock %}
+
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container wide">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a href="{{ url_for('main.notes', project_id=project.id) }}">Vault</a><span>/</span>
+      <a href="{{ url_for('main.node_page', project_id=project.id, node_id=node.id) }}">{{ node.title }}</a><span>/</span><span>History</span>
+    </nav>
+    <header class="page-title with-actions">
+      <div>
+        <h1>Page history</h1>
+        <p class="muted">A version is saved as people edit; one person's edits within 10 minutes share a version.</p>
+      </div>
+      <div class="title-actions">
+        <a class="button ghost-button" href="{{ url_for('main.node_page', project_id=project.id, node_id=node.id) }}">Back to page</a>
+      </div>
+    </header>
+    {{ flashes() }}
+
+    {% if not revisions %}
+      <div class="empty-state">No edits recorded yet. History starts with the next change to this page.</div>
+    {% else %}
+    <div class="history-layout">
+      <ol class="revision-list">
+        {% for revision in revisions %}
+          <li>
+            <a class="revision-item {% if selected and revision.id == selected.id %}active{% endif %}" href="{{ url_for('main.node_history', project_id=project.id, node_id=node.id, rev=revision.id) }}">
+              <span class="revision-time">{{ time(revision.updated_at) }}</span>
+              <span class="revision-meta">{{ revision.user.username if revision.user else "unknown" }}{% if loop.first %} · current{% endif %}</span>
+            </a>
+          </li>
+        {% endfor %}
+      </ol>
+
+      <section class="card revision-view">
+        <div class="card-header">
+          <div>
+            <h2>{{ selected.title }}</h2>
+            {% if selected.caption %}<p class="muted">{{ selected.caption }}</p>{% endif %}
+            <p class="field-hint">Saved {{ time(selected.updated_at) }} by {{ selected.user.username if selected.user else "unknown" }}{% if previous %} · changes compared with the version before{% endif %}</p>
+          </div>
+          {% if can_edit and selected.id != revisions[0].id %}
+          <form method="post" action="{{ url_for('main.restore_revision', project_id=project.id, node_id=node.id, revision_id=selected.id) }}" data-confirm="Replace the page's current text with this version? The current text stays in the history.">
+            {{ csrf() }}
+            <button type="submit" class="primary-button">Restore this version</button>
+          </form>
+          {% endif %}
+        </div>
+        <div class="diff">
+          {% for kind, line in line_diff(previous.notes if previous else "", selected.notes) %}
+            <div class="diff-line diff-{{ kind }}"><span class="diff-mark">{{ "+" if kind == "add" else ("−" if kind == "del" else " ") }}</span><span>{{ line or " " }}</span></div>
+          {% else %}
+            <p class="muted">This version has no notes.</p>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

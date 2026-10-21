@@ -1,0 +1,11 @@
+.git
+.github
+venv
+.venv
+instance
+backups
+__pycache__
+*.pyc
+.env
+tests
+*.zip

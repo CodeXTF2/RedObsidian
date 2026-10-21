@@ -1,0 +1,171 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes, role_badge, csrf %}
+{% block title %}Settings · {{ project.name }}{% endblock %}
+
+{% block app_body %}
+{% set owner = project_role == 'owner' %}
+{% set owner_active = owner and not project.archived_at %}
+<main class="page-shell">
+  <div class="page-container narrow">
+    <header class="page-title with-actions">
+      <div>
+        <h1>Project settings</h1>
+        <p class="muted">Your role: {{ role_badge(project_role) }}</p>
+      </div>
+      {% if owner %}
+      <div class="title-actions">
+        <a class="button ghost-button" href="{{ url_for('main.project_activity', project_id=project.id) }}">Activity log</a>
+      </div>
+      {% endif %}
+    </header>
+    {{ flashes() }}
+
+    <section class="card">
+      <h2>Details</h2>
+      <form method="post" action="{{ url_for('main.update_project', project_id=project.id) }}" class="form-grid">
+        {{ csrf() }}
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input class="input" name="name" value="{{ project.name }}" maxlength="120" required {% if not owner_active %}disabled{% endif %}>
+        </label>
+        <label class="field">
+          <span class="field-label">Description</span>
+          <textarea class="input" name="description" rows="3" {% if not owner_active %}disabled{% endif %}>{{ project.description or "" }}</textarea>
+        </label>
+        {% if owner_active %}<div class="form-actions"><button type="submit" class="primary-button">Save details</button></div>{% endif %}
+      </form>
+    </section>
+
+    <section class="card" id="members">
+      <h2>Members</h2>
+      <p class="muted">Owners manage members and settings, editors change content, viewers can only read. Administrators can open every project.</p>
+      <table class="table">
+        <thead><tr><th>User</th><th>Role</th>{% if owner_active %}<th class="actions-col"></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for member in members %}
+          <tr>
+            <td>
+              <strong>{{ member.user.username }}</strong>
+              {% if member.user_id == current_user.id %}<span class="muted">(you)</span>{% endif %}
+              {% if member.user.disabled %}<span class="badge">Disabled</span>{% endif %}
+            </td>
+            <td>
+              {% if owner_active %}
+                <form method="post" action="{{ url_for('main.update_member', project_id=project.id, user_id=member.user_id) }}" class="inline-form">
+                  {{ csrf() }}
+                  <select class="input select" name="role" data-autosubmit aria-label="Role for {{ member.user.username }}">
+                    {% for role in roles %}<option value="{{ role }}" {% if role == member.role %}selected{% endif %}>{{ role|capitalize }}</option>{% endfor %}
+                  </select>
+                  <noscript><button type="submit">Save</button></noscript>
+                </form>
+              {% else %}
+                {{ role_badge(member.role) }}
+              {% endif %}
+            </td>
+            {% if owner_active %}
+            <td class="actions-col">
+              <form method="post" action="{{ url_for('main.update_member', project_id=project.id, user_id=member.user_id) }}" data-confirm="Remove {{ member.user.username }} from this project?">
+                {{ csrf() }}
+                <input type="hidden" name="action" value="remove">
+                <button type="submit" class="ghost-button danger small">Remove</button>
+              </form>
+            </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% if owner_active %}
+        {% if candidates %}
+        <form method="post" action="{{ url_for('main.add_member', project_id=project.id) }}" class="inline-form add-member">
+          {{ csrf() }}
+          <select class="input select" name="user_id" required aria-label="User to add">
+            <option value="">Add a teammate…</option>
+            {% for user in candidates %}<option value="{{ user.id }}">{{ user.username }}</option>{% endfor %}
+          </select>
+          <select class="input select" name="role" aria-label="Role">
+            {% for role in roles %}<option value="{{ role }}" {% if role == 'editor' %}selected{% endif %}>{{ role|capitalize }}</option>{% endfor %}
+          </select>
+          <button type="submit" class="primary-button">Add</button>
+        </form>
+        {% else %}
+        <p class="field-hint">Everyone with an account is already a member.{% if current_user.is_admin %} <a href="{{ url_for('admin.users') }}">Create accounts</a> in Administration.{% endif %}</p>
+        {% endif %}
+      {% endif %}
+    </section>
+
+    <section class="card" id="features">
+      <h2>Features</h2>
+      {% for feature, label, hint in [
+           ("findings", "Findings", "Write up issues with severity, CVSS and evidence pages, and include them in the report. Turning it off hides the tab but keeps existing findings."),
+           ("report", "Report", "Fill in the cover page and narrative, then export to Word, PDF or Markdown. Turning it off hides the tab but keeps the report details."),
+         ] %}
+      <form method="post" action="{{ url_for('main.update_features', project_id=project.id) }}">
+        {{ csrf() }}
+        <input type="hidden" name="feature" value="{{ feature }}">
+        <label class="switch-row">
+          <span class="switch-text">
+            <span class="switch-label">{{ label }} <span class="beta-tag">Beta</span></span>
+            <span class="field-hint">{{ hint }}</span>
+          </span>
+          <input type="checkbox" name="{{ feature }}_enabled" class="switch" data-autosubmit-toggle
+                 {% if project[feature ~ '_enabled'] %}checked{% endif %} {% if not owner_active %}disabled{% endif %}>
+        </label>
+        <noscript>{% if owner_active %}<button type="submit">Save</button>{% endif %}</noscript>
+      </form>
+      {% endfor %}
+      {% if not owner_active %}<p class="field-hint">Only project owners can change features{% if project.archived_at %}, and not while the project is archived{% endif %}.</p>{% endif %}
+    </section>
+
+    {% if owner %}
+    <section class="card">
+      <h2>Export</h2>
+      <p class="muted">Download an AES-encrypted ZIP of pages, links, timeline, findings, report details and uploads. Share the password separately.</p>
+      <form method="post" action="{{ url_for('main.export_project_download', project_id=project.id) }}" class="form-grid two-col">
+        {{ csrf() }}
+        <label class="field">
+          <span class="field-label">Password <span class="optional">at least 8 characters</span></span>
+          <input class="input" type="password" name="password" minlength="8" required autocomplete="new-password">
+        </label>
+        <label class="field">
+          <span class="field-label">Confirm password</span>
+          <input class="input" type="password" name="confirm_password" minlength="8" required autocomplete="new-password">
+        </label>
+        <div class="form-actions span-2"><button type="submit">Download export</button></div>
+      </form>
+    </section>
+
+    <section class="card" id="archive">
+      <div class="card-header">
+        <div>
+          <h2>{{ "Restore project" if project.archived_at else "Archive project" }}</h2>
+          <p class="muted">
+            {% if project.archived_at %}
+              Archived {{ project.archived_at.strftime('%Y-%m-%d') }}. Restoring makes it editable again.
+            {% else %}
+              Archiving makes the project read-only and moves it to the Archived tab when the engagement ends.
+            {% endif %}
+            Your administrator may purge archived projects after a retention period.
+          </p>
+        </div>
+        <form method="post" action="{{ url_for('main.archive_project', project_id=project.id) }}">
+          {{ csrf() }}
+          <input type="hidden" name="archive" value="{{ '0' if project.archived_at else '1' }}">
+          <button type="submit" class="ghost-button">{{ "Restore" if project.archived_at else "Archive" }}</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="card danger-zone">
+      <h2>Delete project</h2>
+      <p class="muted">Permanently deletes every page, link, timeline event, finding and uploaded file. This can't be undone.</p>
+      <form method="post" action="{{ url_for('main.delete_project', project_id=project.id) }}" class="inline-form" data-confirm="Permanently delete this project and everything in it?">
+        {{ csrf() }}
+        <input class="input" name="confirm_name" required autocomplete="off" placeholder="Type “{{ project.name }}” to confirm" data-match="{{ project.name }}" data-enables="#delete-project-button">
+        <button id="delete-project-button" type="submit" class="danger-button" disabled>Delete forever</button>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

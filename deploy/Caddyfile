@@ -1,0 +1,15 @@
+# Caddy terminates TLS and proxies HTTP + WebSockets to the app.
+# A public domain gets a Let's Encrypt certificate automatically. For an internal-only hostname,
+# uncomment `tls internal` (Caddy's own CA) or point `tls` at your organisation's certificate files.
+{$REDOBSIDIAN_DOMAIN} {
+	# tls internal
+	encode gzip
+	request_body {
+		max_size 1GB
+	}
+	reverse_proxy app:5000 {
+		# Needed only when you run several app containers: keeps a browser on the same one
+		# for Socket.IO long-polling. Harmless with a single container.
+		lb_policy cookie
+	}
+}

@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_macros.html" import flashes %}
+{% block title %}Sign in · RedObsidian{% endblock %}
 
 {% block body %}
 <main class="auth-shell">
@@ -8,21 +10,14 @@
       <p class="eyebrow">Sign in</p>
     </div>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="flash-stack">
-          {% for category, message in messages %}
-            <p class="flash {{ category }}">{{ message }}</p>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+    {{ flashes() }}
 
+    {% if not (sso_enabled and settings.sso_disable_password_login) %}
     <form method="post" class="auth-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>
         <span>Username</span>
-        <input name="username" autocomplete="username" required>
+        <input name="username" autocomplete="username" required autofocus>
       </label>
       <label>
         <span>Password</span>
@@ -30,6 +25,23 @@
       </label>
       <button type="submit">Sign in</button>
     </form>
+    {% endif %}
+
+    {% if sso_enabled %}
+      {% if not settings.sso_disable_password_login %}<div class="auth-divider"><span>or</span></div>{% endif %}
+      <a class="sso-button" href="{{ url_for('auth.sso_login') }}">{{ settings.sso_button_label or "Sign in with SSO" }}</a>
+      {% if settings.sso_disable_password_login %}
+        <details class="auth-fallback">
+          <summary>Administrator sign-in</summary>
+          <form method="post" class="auth-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label><span>Username</span><input name="username" autocomplete="username" required></label>
+            <label><span>Password</span><input name="password" type="password" autocomplete="current-password" required></label>
+            <button type="submit">Sign in</button>
+          </form>
+        </details>
+      {% endif %}
+    {% endif %}
   </section>
 </main>
 {% endblock %}

@@ -1,0 +1,33 @@
+[project]
+name = "redobsidian"
+version = "2.0.0"
+description = "Reporting and collaboration platform for pentesters and red teams"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 145
+target-version = "py311"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I", "S", "UP"]
+ignore = [
+  "S101",   # asserts are fine in tests
+  "S104",   # binding to 0.0.0.0 is intended inside containers
+  "S603",   # subprocess calls use fixed argument lists (pg_dump/pg_restore)
+  "S607",
+  "B008",
+  "UP017",  # keep timezone.utc for readability
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S107", "S108"]
+"wsgi.py" = ["E402"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"
+filterwarnings = ["ignore::DeprecationWarning"]

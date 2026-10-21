@@ -1,0 +1,67 @@
+{% extends "account_base.html" %}
+{% from "_macros.html" import csrf %}
+{% block title %}Account · RedObsidian{% endblock %}
+{% block content %}
+<header class="page-title">
+  <h1>Account &amp; security</h1>
+  <p class="muted">Signed in as <strong>{{ current_user.username }}</strong>{% if current_user.is_admin %} · administrator{% endif %}{% if current_user.last_login_at %} · last sign-in {{ current_user.last_login_at.strftime('%Y-%m-%d %H:%M') }} UTC{% endif %}</p>
+</header>
+
+<section class="card">
+  <div class="card-header">
+    <div>
+      <h2>Password</h2>
+      <p class="muted">{% if current_user.has_password %}Changing it signs out your other sessions.{% else %}You sign in with single sign-on. You can also set a password.{% endif %}</p>
+    </div>
+    <a class="button" href="{{ url_for('auth.change_password') }}">{{ "Change password" if current_user.has_password else "Set password" }}</a>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-header">
+    <div>
+      <h2>Two-factor authentication {% if current_user.totp_enabled %}<span class="badge ok">On</span>{% else %}<span class="badge">Off</span>{% endif %}</h2>
+      <p class="muted">
+        {% if current_user.totp_enabled %}
+          You'll be asked for a code from your authenticator app when you sign in. {{ recovery_left }} recovery code{{ "" if recovery_left == 1 else "s" }} left.
+        {% else %}
+          Add a second step to sign-in using an authenticator app (1Password, Authy, Google Authenticator…).
+        {% endif %}
+        {% if totp_required %}Your administrator requires it.{% endif %}
+      </p>
+    </div>
+    {% if not current_user.totp_enabled %}
+      <a class="button primary-button" href="{{ url_for('auth.totp_setup') }}">Set up</a>
+    {% endif %}
+  </div>
+  {% if current_user.totp_enabled %}
+  <div class="card-body split">
+    <form method="post" action="{{ url_for('auth.regenerate_recovery_codes') }}" class="inline-form">
+      {{ csrf() }}
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Current code" required class="input">
+      <button type="submit">New recovery codes</button>
+    </form>
+    {% if not totp_required %}
+    <form method="post" action="{{ url_for('auth.totp_disable') }}" class="inline-form">
+      {{ csrf() }}
+      <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="Current code" required class="input">
+      <button type="submit" class="ghost-button danger">Turn off</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-header">
+    <div>
+      <h2>Sessions</h2>
+      <p class="muted">Sign out every other browser where you're signed in, for example after using a shared machine.</p>
+    </div>
+    <form method="post" action="{{ url_for('auth.sign_out_everywhere') }}">
+      {{ csrf() }}
+      <button type="submit" class="ghost-button">Sign out other sessions</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

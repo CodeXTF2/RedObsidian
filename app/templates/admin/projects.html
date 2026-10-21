@@ -1,0 +1,30 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<header class="page-title">
+  <h1>Projects</h1>
+  <p class="muted">Every project on this server. Administrators can open any project and manage it from its Settings tab.
+    {% if settings.archived_project_retention_days %}Archived projects are purged {{ settings.archived_project_retention_days }} days after archiving.{% endif %}</p>
+</header>
+<div class="table-wrap">
+<table class="table">
+  <thead><tr><th>Project</th><th>Owners</th><th>Members</th><th>Created</th><th>Status</th><th class="actions-col"></th></tr></thead>
+  <tbody>
+  {% for item in projects %}
+    <tr>
+      <td><a href="{{ url_for('main.notes', project_id=item.id) }}"><strong>{{ item.name }}</strong></a></td>
+      <td>{{ owners.get(item.id, [])|join(", ") or "—" }}</td>
+      <td>{{ counts.get(item.id, 0) }}</td>
+      <td class="nowrap muted">{{ item.created_at.strftime('%Y-%m-%d') }}</td>
+      <td>{% if item.archived_at %}<span class="badge">Archived {{ item.archived_at.strftime('%Y-%m-%d') }}</span>{% else %}<span class="badge ok">Active</span>{% endif %}</td>
+      <td class="actions-col nowrap">
+        <a class="button ghost-button small" href="{{ url_for('main.project_settings', project_id=item.id) }}">Settings</a>
+        <a class="button ghost-button small" href="{{ url_for('admin.audit_log', project=item.id) }}">Activity</a>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="empty-row">No projects yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

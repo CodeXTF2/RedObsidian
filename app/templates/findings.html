@@ -1,0 +1,64 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes, severity_badge, status_badge %}
+{% block title %}Findings · {{ project.name }}{% endblock %}
+
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container">
+    <header class="page-title with-actions">
+      <div>
+        <h1>Findings</h1>
+        <p class="muted">Write up each issue once with severity, CVSS and evidence pages{% if project.report_enabled %}; the Report tab turns them into a deliverable{% endif %}.</p>
+      </div>
+      <div class="title-actions">
+        {% if project.report_enabled %}<a class="button ghost-button" href="{{ url_for('findings.report', project_id=project.id) }}">Report</a>{% endif %}
+        {% if can_edit %}<a class="button primary-button" href="{{ url_for('findings.new_finding', project_id=project.id) }}">New finding</a>{% endif %}
+      </div>
+    </header>
+    {{ flashes() }}
+
+    <div class="severity-summary" role="list">
+      {% for level in severities %}
+        <a role="listitem" class="sev-tile sev-{{ level }} {% if severity_filter == level %}active{% endif %}"
+           href="{{ url_for('findings.list_findings', project_id=project.id, severity=None if severity_filter == level else level, status=status_filter) }}">
+          <span class="sev-count">{{ counts[level] }}</span>
+          <span class="sev-name">{{ level|capitalize }}</span>
+        </a>
+      {% endfor %}
+    </div>
+
+    <nav class="tabs" aria-label="Status filter">
+      <a class="{{ 'active' if not status_filter }}" href="{{ url_for('findings.list_findings', project_id=project.id, severity=severity_filter) }}">All</a>
+      {% for status in statuses %}
+        <a class="{{ 'active' if status_filter == status }}" href="{{ url_for('findings.list_findings', project_id=project.id, status=status, severity=severity_filter) }}">{{ status_label(status) }}</a>
+      {% endfor %}
+    </nav>
+
+    {% if findings %}
+    <div class="table-wrap">
+      <table class="table findings-table">
+        <thead><tr><th>Finding</th><th>Severity</th><th>CVSS</th><th>Status</th><th>Affected</th><th>Updated</th></tr></thead>
+        <tbody>
+          {% for finding in findings %}
+          <tr class="row-link">
+            <td><a href="{{ url_for('findings.edit_finding', project_id=project.id, finding_id=finding.id) }}"><strong>{{ finding.title }}</strong></a></td>
+            <td>{{ severity_badge(finding.severity) }}</td>
+            <td class="nowrap">{{ "%.1f"|format(finding.cvss_score) if finding.cvss_score is not none else "—" }}</td>
+            <td>{{ status_badge(finding.status) }}</td>
+            <td class="truncate">{{ finding.affected_assets or "—" }}</td>
+            <td class="nowrap muted">{{ finding.updated_at.strftime('%b %d') }} · {{ finding.user.username if finding.user else "" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="empty-state">
+        {% if severity_filter or status_filter %}No findings match this filter.
+        {% elif can_edit %}No findings yet. Use <strong>New finding</strong>, or <strong>Create finding</strong> from any page in the Vault to link it as evidence.
+        {% else %}No findings yet.{% endif %}
+      </div>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

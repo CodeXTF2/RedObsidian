@@ -1,0 +1,20 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import time %}
+{% block title %}Activity · {{ project.name }}{% endblock %}
+
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container">
+    <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{{ url_for('main.project_settings', project_id=project.id) }}">Settings</a><span>/</span><span>Activity log</span></nav>
+    <header class="page-title">
+      <h1>Activity log</h1>
+      <p class="muted">Who did what in this project. Page edits are kept in each page's history.</p>
+    </header>
+    {% include "_audit_table.html" %}
+    <div class="pager">
+      {% if page > 1 %}<a class="button ghost-button" href="{{ url_for('main.project_activity', project_id=project.id, page=page - 1) }}">Newer</a>{% endif %}
+      {% if has_more %}<a class="button ghost-button" href="{{ url_for('main.project_activity', project_id=project.id, page=page + 1) }}">Older</a>{% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}

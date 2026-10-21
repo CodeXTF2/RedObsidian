@@ -1,0 +1,101 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes, csrf, severity_badge %}
+{% block title %}{{ finding.title or "New finding" }} · {{ project.name }}{% endblock %}
+
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container wide">
+    <nav class="breadcrumbs" aria-label="Breadcrumb">
+      <a href="{{ url_for('findings.list_findings', project_id=project.id) }}">Findings</a><span>/</span>
+      <span>{{ "New finding" if is_new else finding.title }}</span>
+    </nav>
+    {{ flashes() }}
+
+    <form method="post" class="finding-form"
+          action="{{ url_for('findings.create_finding', project_id=project.id) if is_new else url_for('findings.update_finding', project_id=project.id, finding_id=finding.id) }}">
+      {{ csrf() }}
+      <fieldset class="finding-layout" {% if not can_edit %}disabled{% endif %}>
+        <div class="finding-main">
+          <input class="title-input finding-title" name="title" value="{{ finding.title }}" placeholder="Finding title, e.g. SQL injection in /api/search" maxlength="200" required {% if is_new %}autofocus{% endif %}>
+          {% for name, label, hint in [
+            ("description", "Description", "What is the issue and how was it found? Markdown supported; images from the vault are embedded in the report."),
+            ("impact", "Impact", "What could an attacker achieve?"),
+            ("remediation", "Remediation", "How should it be fixed?"),
+            ("references", "References", "CWE, OWASP, vendor advisories…")] %}
+          <label class="field">
+            <span class="field-label">{{ label }}</span>
+            <textarea class="input md-textarea" name="{{ name }}" rows="{{ 8 if name == 'description' else 4 }}" placeholder="{{ hint }}">{{ finding[name] or "" }}</textarea>
+          </label>
+          {% endfor %}
+        </div>
+
+        <aside class="finding-side">
+          <section class="card compact">
+            <label class="field">
+              <span class="field-label">Status</span>
+              <select class="input select" name="status">
+                {% for status in statuses %}<option value="{{ status }}" {% if status == finding.status %}selected{% endif %}>{{ status_label(status) }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">CVSS 3.1 vector <span class="optional">optional</span></span>
+              <input class="input mono" name="cvss_vector" value="{{ finding.cvss_vector or '' }}" placeholder="CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" data-cvss-input data-cvss-url="{{ url_for('findings.cvss_api') }}">
+              <span class="field-hint" data-cvss-output>{% if finding.cvss_score is not none %}Score {{ "%.1f"|format(finding.cvss_score) }}{% endif %}</span>
+            </label>
+            <label class="field">
+              <span class="field-label">CVSS score <span class="optional">calculated from the vector if given</span></span>
+              <input class="input" name="cvss_score" type="number" min="0" max="10" step="0.1" value="{{ finding.cvss_score if finding.cvss_score is not none else '' }}" data-cvss-score>
+            </label>
+            <label class="field">
+              <span class="field-label">Severity</span>
+              <select class="input select" name="severity" data-cvss-severity>
+                {% for level in severities %}<option value="{{ level }}" {% if level == finding.severity %}selected{% endif %}>{{ level|capitalize }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="field">
+              <span class="field-label">Affected assets</span>
+              <textarea class="input" name="affected_assets" rows="3" placeholder="Hosts, URLs, accounts…">{{ finding.affected_assets or "" }}</textarea>
+            </label>
+          </section>
+
+          <section class="card compact">
+            <div class="field">
+              <span class="field-label">Evidence pages</span>
+              <span class="field-hint">Their notes and screenshots go into the report under this finding.</span>
+            </div>
+            {% if pages|length > 8 %}<input class="input small-input" type="search" placeholder="Filter pages…" data-filter-list="#evidence-list" aria-label="Filter pages">{% endif %}
+            <div class="check-list" id="evidence-list">
+              {% for page in pages %}
+                <label class="check-row">
+                  <input type="checkbox" name="evidence" value="{{ page.id }}" {% if page.id in finding.evidence_node_ids %}checked{% endif %}>
+                  <span>{{ page.title }}</span>
+                  {% if not is_new or page.id in finding.evidence_node_ids %}<a class="open-link" href="{{ url_for('main.node_page', project_id=project.id, node_id=page.id) }}" title="Open page" aria-label="Open {{ page.title }}">↗</a>{% endif %}
+                </label>
+              {% else %}
+                <p class="field-hint">No pages yet.</p>
+              {% endfor %}
+            </div>
+          </section>
+
+          {% if can_edit %}
+          <div class="form-actions sticky-actions">
+            <button type="submit" class="primary-button">{{ "Create finding" if is_new else "Save changes" }}</button>
+            <a class="button ghost-button" href="{{ url_for('findings.list_findings', project_id=project.id) }}">Cancel</a>
+          </div>
+          {% endif %}
+          {% if not is_new %}
+          <p class="field-hint">Created {{ finding.created_at.strftime('%Y-%m-%d') }}{% if finding.user %} by {{ finding.user.username }}{% endif %} · updated {{ finding.updated_at.strftime('%Y-%m-%d %H:%M') }} UTC</p>
+          {% endif %}
+        </aside>
+      </fieldset>
+    </form>
+
+    {% if can_edit and not is_new %}
+    <form method="post" action="{{ url_for('findings.delete_finding', project_id=project.id, finding_id=finding.id) }}" class="delete-finding" data-confirm="Delete this finding? This can't be undone.">
+      {{ csrf() }}
+      <button type="submit" class="ghost-button danger">Delete finding</button>
+    </form>
+    {% endif %}
+  </div>
+</main>
+{% endblock %}

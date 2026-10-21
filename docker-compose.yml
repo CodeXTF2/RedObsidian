@@ -1,0 +1,78 @@
+# Production-style stack: Caddy (TLS) -> RedObsidian -> PostgreSQL, with Redis for realtime fan-out.
+#   cp .env.example .env    # then fill in the secrets
+#   docker compose up -d
+#   docker compose exec app python manage_users.py create <you> --admin
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://redobsidian:${POSTGRES_PASSWORD}@db:5432/redobsidian
+      REDIS_URL: redis://redis:6379/0
+      REDOBSIDIAN_SECURE_COOKIES: "1"
+      REDOBSIDIAN_BEHIND_PROXY: "1"
+    volumes:
+      - app-data:/data
+      - ./backups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    expose:
+      - "5000"
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: redobsidian
+      POSTGRES_USER: redobsidian
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U redobsidian -d redobsidian"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      REDOBSIDIAN_DOMAIN: ${REDOBSIDIAN_DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - app
+
+  # Nightly encrypted backup into ./backups, keeping two weeks. Remove if you back up another way.
+  backup:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://redobsidian:${POSTGRES_PASSWORD}@db:5432/redobsidian
+      REDOBSIDIAN_AUTO_MIGRATE: "0"
+    volumes:
+      - app-data:/data
+      - ./backups:/backups
+    depends_on:
+      - app
+    entrypoint: ["sh", "-c", "while true; do python manage_backup.py backup --dir /backups --keep 14 || echo 'backup failed'; sleep 86400; done"]
+
+volumes:
+  app-data:
+  db-data:
+  caddy-data:

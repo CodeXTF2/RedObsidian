@@ -1,0 +1,153 @@
+{% extends "admin/base.html" %}
+{% from "_macros.html" import csrf, switch %}
+{% block content %}
+<header class="page-title">
+  <h1>Security &amp; settings</h1>
+  <p class="muted">All security policies are off until you turn them on. Changes apply immediately and are written to the audit log.</p>
+</header>
+
+<form method="post" action="{{ url_for('admin.save_settings') }}" class="settings-form">
+  {{ csrf() }}
+
+  <section class="card" id="passwords">
+    <h2>Password policy</h2>
+    {{ switch("password_policy_enabled", values.password_policy_enabled, "Enforce password rules", "Applies when people set or change a password. Existing passwords aren't checked until they change.") }}
+    <div class="sub-settings" data-depends-on="password_policy_enabled">
+      <label class="field inline-field">
+        <span class="field-label">Minimum length</span>
+        <input class="input number" type="number" name="password_min_length" min="1" max="256" value="{{ values.password_min_length }}">
+      </label>
+      <div class="check-inline">
+        <label><input type="checkbox" name="password_require_upper" {% if values.password_require_upper %}checked{% endif %}> Uppercase letter</label>
+        <label><input type="checkbox" name="password_require_lower" {% if values.password_require_lower %}checked{% endif %}> Lowercase letter</label>
+        <label><input type="checkbox" name="password_require_digit" {% if values.password_require_digit %}checked{% endif %}> Number</label>
+        <label><input type="checkbox" name="password_require_symbol" {% if values.password_require_symbol %}checked{% endif %}> Symbol</label>
+      </div>
+    </div>
+    <label class="field inline-field">
+      <span class="field-label">Password expiry (days) <span class="optional">0 = never</span></span>
+      <input class="input number" type="number" name="password_max_age_days" min="0" value="{{ values.password_max_age_days }}">
+    </label>
+  </section>
+
+  <section class="card" id="mfa">
+    <h2>Two-factor authentication</h2>
+    {{ switch("totp_required", values.totp_required, "Require two-factor authentication for everyone",
+              "People without it are sent to set it up at their next page load. SSO sign-ins are exempt; your identity provider handles MFA for them.") }}
+  </section>
+
+  <section class="card" id="lockout">
+    <h2>Brute-force protection</h2>
+    {{ switch("lockout_enabled", values.lockout_enabled, "Lock accounts after repeated failed sign-ins",
+              "Counts failures per username and per address (an address gets 5× the limit, for shared NAT). The lock lifts when the window passes.") }}
+    <div class="sub-settings inline-fields" data-depends-on="lockout_enabled">
+      <label class="field inline-field">
+        <span class="field-label">Failed attempts allowed</span>
+        <input class="input number" type="number" name="lockout_max_attempts" min="1" value="{{ values.lockout_max_attempts }}">
+      </label>
+      <label class="field inline-field">
+        <span class="field-label">Window / lock duration (minutes)</span>
+        <input class="input number" type="number" name="lockout_window_minutes" min="1" value="{{ values.lockout_window_minutes }}">
+      </label>
+    </div>
+  </section>
+
+  <section class="card" id="sessions">
+    <h2>Sessions</h2>
+    <label class="field inline-field">
+      <span class="field-label">Sign out after inactivity (minutes) <span class="optional">0 = never</span></span>
+      <input class="input number" type="number" name="session_idle_timeout_minutes" min="0" value="{{ values.session_idle_timeout_minutes }}">
+    </label>
+  </section>
+
+  <section class="card" id="sso">
+    <h2>Single sign-on (OpenID Connect)
+      {% if values.sso_enabled and sso_ready %}<span class="badge ok">Active</span>{% elif values.sso_enabled %}<span class="badge warn">Incomplete</span>{% endif %}
+    </h2>
+    {{ switch("sso_enabled", values.sso_enabled, "Enable SSO sign-in", "Works with Entra ID, Okta, Google Workspace, Keycloak, Authentik and other OIDC providers.") }}
+    <div class="sub-settings" data-depends-on="sso_enabled">
+      <p class="field-hint">Register this redirect URI with your provider: <code>{{ callback_url }}</code>{% if callback_url.startswith('http://') %} (behind a TLS proxy, set <code>REDOBSIDIAN_BEHIND_PROXY=1</code> so this shows https){% endif %}</p>
+      <div class="form-grid two-col">
+        <label class="field span-2">
+          <span class="field-label">Discovery URL</span>
+          <input class="input mono" name="sso_discovery_url" value="{{ values.sso_discovery_url }}" placeholder="https://login.example.com/.well-known/openid-configuration">
+        </label>
+        <label class="field">
+          <span class="field-label">Client ID</span>
+          <input class="input mono" name="sso_client_id" value="{{ values.sso_client_id }}" autocomplete="off">
+        </label>
+        <label class="field">
+          <span class="field-label">Client secret {% if secret_set.sso_client_secret %}<span class="optional">set — leave empty to keep</span>{% endif %}</span>
+          <input class="input mono" name="sso_client_secret" type="password" autocomplete="new-password">
+          {% if secret_set.sso_client_secret %}<label class="check-small"><input type="checkbox" name="sso_client_secret__clear"> Clear the stored secret</label>{% endif %}
+        </label>
+        <label class="field">
+          <span class="field-label">Scopes</span>
+          <input class="input mono" name="sso_scopes" value="{{ values.sso_scopes }}">
+        </label>
+        <label class="field">
+          <span class="field-label">Username claim</span>
+          <input class="input mono" name="sso_username_claim" value="{{ values.sso_username_claim }}">
+          <span class="field-hint">Matched to an existing username on first sign-in, then the account is linked to the SSO identity. Use a claim your provider controls.</span>
+        </label>
+        <label class="field">
+          <span class="field-label">Button label</span>
+          <input class="input" name="sso_button_label" value="{{ values.sso_button_label }}">
+        </label>
+      </div>
+      {{ switch("sso_auto_create_users", values.sso_auto_create_users, "Create accounts on first SSO sign-in", "New accounts start with no project access.") }}
+      {{ switch("sso_disable_password_login", values.sso_disable_password_login, "Disable password sign-in for non-admins", "Administrators keep password sign-in as a break-glass route.") }}
+    </div>
+  </section>
+
+  <section class="card" id="projects">
+    <h2>Projects &amp; retention</h2>
+    {{ switch("only_admins_create_projects", values.only_admins_create_projects, "Only administrators can create or import projects") }}
+    <div class="inline-fields">
+      <label class="field inline-field">
+        <span class="field-label">Keep deleted pages for undo (days) <span class="optional">0 = forever</span></span>
+        <input class="input number" type="number" name="deleted_page_retention_days" min="0" value="{{ values.deleted_page_retention_days }}">
+      </label>
+      <label class="field inline-field">
+        <span class="field-label">Purge archived projects after (days) <span class="optional">0 = never</span></span>
+        <input class="input number" type="number" name="archived_project_retention_days" min="0" value="{{ values.archived_project_retention_days }}">
+      </label>
+      <label class="field inline-field">
+        <span class="field-label">Keep audit log entries (days) <span class="optional">0 = forever</span></span>
+        <input class="input number" type="number" name="audit_log_retention_days" min="0" value="{{ values.audit_log_retention_days }}">
+      </label>
+    </div>
+    <p class="field-hint">Purges run at start-up and hourly. Purged projects are deleted with their files; that can't be undone.</p>
+  </section>
+
+  <section class="card" id="uploads">
+    <h2>Uploads</h2>
+    <label class="field inline-field">
+      <span class="field-label">Maximum file size (MB) <span class="optional">0 = server limit only</span></span>
+      <input class="input number" type="number" name="max_upload_mb" min="0" value="{{ values.max_upload_mb }}">
+    </label>
+  </section>
+
+  <div class="form-actions sticky-actions"><button type="submit" class="primary-button">Save settings</button></div>
+</form>
+
+<section class="card" id="reports">
+  <h2>Report template</h2>
+  <p class="muted">Upload a Word document with your organisation's styles, headers and footers, and cover page. Generated content is appended after it, using its <em>Title</em>, <em>Heading 1–5</em>, <em>List Bullet</em> and <em>Table Grid</em> styles.</p>
+  <div class="inline-form">
+    <form method="post" action="{{ url_for('admin.report_template') }}" enctype="multipart/form-data" class="inline-form">
+      {{ csrf() }}
+      <input class="input" type="file" name="template" accept=".docx" required>
+      <button type="submit">Upload</button>
+    </form>
+    {% if report_template_exists() %}
+    <form method="post" action="{{ url_for('admin.report_template') }}" data-confirm="Remove the report template?">
+      {{ csrf() }}
+      <input type="hidden" name="action" value="remove">
+      <button type="submit" class="ghost-button danger">Remove current template</button>
+    </form>
+    {% endif %}
+  </div>
+  <p class="field-hint">{{ "A template is in use." if report_template_exists() else "No template uploaded; the built-in layout is used." }}</p>
+</section>
+{% endblock %}

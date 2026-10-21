@@ -1,0 +1,28 @@
+{% from "_macros.html" import time %}
+<div class="table-wrap">
+<table class="table audit-table">
+  <thead>
+    <tr><th>When</th><th>Who</th><th>Action</th>{% if project_names is defined %}<th>Project</th>{% endif %}<th>Details</th><th>IP</th></tr>
+  </thead>
+  <tbody>
+  {% for entry in entries %}
+    <tr>
+      <td class="nowrap">{{ time(entry.at) }}</td>
+      <td>{{ entry.username or "—" }}</td>
+      <td><code class="action action-{{ entry.action.split('.')[0] }}">{{ entry.action }}</code></td>
+      {% if project_names is defined %}<td>{% if entry.project_id %}{{ project_names.get(entry.project_id, "#" ~ entry.project_id ~ " (deleted)") }}{% else %}—{% endif %}</td>{% endif %}
+      <td class="details">
+        {% set details = entry.details %}
+        {% if entry.target_type %}<span class="muted">{{ entry.target_type }} {{ entry.target_id or "" }}</span>{% endif %}
+        {% for key, value in details.items() %}
+          <span class="kv"><span class="k">{{ key }}</span> {{ value if value is string else value|tojson }}</span>
+        {% endfor %}
+      </td>
+      <td class="nowrap muted">{{ entry.ip or "" }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="empty-row">No activity recorded.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>

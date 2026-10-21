@@ -1,272 +1,106 @@
-{% extends "base.html" %}
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes, role_badge, csrf %}
+{% block title %}Projects · RedObsidian{% endblock %}
 
-{% block head %}
-<style>
-  .projects-layout {
-    display: grid;
-    grid-template-columns: 1fr 340px;
-    height: 100vh;
-  }
-
-  .projects-content {
-    padding: 3rem;
-    overflow-y: auto;
-    background: var(--bg);
-  }
-
-  .projects-sidebar {
-    background: var(--sidebar);
-    border-left: 1px solid var(--line);
-    padding: 2.5rem 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 2.5rem;
-    overflow-y: auto;
-  }
-
-  .project-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1.5rem;
-    margin-top: 2rem;
-  }
-
-  .project-card {
-    background: var(--sidebar-2);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1.2rem;
-    transition: all 0.2s ease;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .project-card:hover {
-    border-color: var(--accent);
-    transform: translateY(-3px);
-    background: #323232;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-  }
-
-  .project-card-info h3 {
-    margin: 0 0 0.5rem;
-    font-size: 1.4rem;
-    color: var(--text-strong);
-    letter-spacing: -0.01em;
-  }
-
-  .project-card-info p {
-    margin: 0;
-    font-size: 0.92rem;
-    color: var(--muted);
-    line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .project-card-meta {
-    font-size: 0.78rem;
-    color: var(--faint);
-    font-weight: 600;
-  }
-
-  .project-card-actions {
-    display: flex;
-    gap: 0.75rem;
-    margin-top: auto;
-  }
-
-  .btn-select {
-    flex: 1;
-    background: rgba(45, 212, 191, 0.08);
-    border: 1px solid var(--accent-2);
-    color: var(--accent-2);
-    text-align: center;
-    padding: 0.6rem;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 0.9rem;
-    text-decoration: none;
-    transition: all 0.15s ease;
-  }
-
-  .btn-select:hover {
-    background: var(--accent-2);
-    color: #061113;
-  }
-
-  .btn-delete {
-    background: rgba(255, 123, 114, 0.08);
-    border: 1px solid var(--danger);
-    color: var(--danger);
-    padding: 0.6rem;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.15s ease;
-  }
-
-  .btn-delete:hover:not(:disabled) {
-    background: var(--danger);
-    color: white;
-  }
-
-  .sidebar-section h2 {
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--faint);
-    margin-bottom: 1.25rem;
-    font-weight: 800;
-  }
-
-  @media (max-width: 900px) {
-    .projects-layout {
-      grid-template-columns: 1fr;
-      height: auto;
-    }
-    .projects-sidebar {
-      border-left: 0;
-      border-top: 1px solid var(--line);
-    }
-    .projects-content {
-      height: auto;
-      max-height: none;
-    }
-  }
-</style>
-{% endblock %}
-
-{% block body %}
-<main class="projects-layout">
-  <section class="projects-content">
-    <header>
-      <h1 class="brand brand-large" style="margin-bottom: 0.5rem;">Projects</h1>
-      <p class="eyebrow" style="margin-bottom: 0;">Select a project to continue</p>
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          <div class="flash-stack" style="margin-top: 1rem;">
-            {% for category, message in messages %}
-              <p class="flash {{ category }}">{{ message }}</p>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% endwith %}
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container">
+    <header class="page-title with-actions">
+      <div>
+        <h1>Projects</h1>
+        <p class="muted">Engagements you're a member of{% if current_user.is_admin %} (as an administrator you can see all of them){% endif %}.</p>
+      </div>
+      {% if can_create %}
+      <div class="title-actions">
+        <button type="button" class="ghost-button" data-toggle="#import-panel">Import</button>
+        <button type="button" class="primary-button" data-toggle="#create-panel">New project</button>
+      </div>
+      {% endif %}
     </header>
 
-    <div class="project-grid">
-      {% if projects %}
-        {% for project in projects %}
-          <div class="project-card">
-            <div class="project-card-info">
-              <h3>{{ project.name }}</h3>
-              <p>{{ project.description or "No description provided." }}</p>
-            </div>
-            
-            <div class="project-card-meta">
-              <span>By {{ project.created_by.username }} &bull; {{ project.created_at.strftime('%b %d, %Y') }}</span>
-            </div>
+    {{ flashes() }}
 
-            <div class="project-card-actions">
-              <a href="{{ url_for('main.select_project', project_id=project.id) }}" class="btn-select">Open Project</a>
-              {% if project.created_by_id == current_user.id %}
-              <button onclick='showDeleteDialog("{{ project.id }}", {{ project.name | tojson | forceescape }})' class="btn-delete">Delete</button>
-              {% else %}
-              <button class="btn-delete" disabled title="Only {{ project.created_by.username }} (the project's creator) can delete it">Delete</button>
-              {% endif %}
-            </div>
-          </div>
-        {% endfor %}
-      {% else %}
-        <div class="empty-state" style="grid-column: 1 / -1; padding: 4rem 2rem; text-align: center; border: 2px dashed var(--line); border-radius: 12px; color: var(--muted);">
-          <p>No projects found. Create your first project using the sidebar.</p>
+    {% if can_create %}
+    <section id="create-panel" class="card collapsible" {% if projects or show_archived %}hidden{% endif %}>
+      <h2>New project</h2>
+      <form method="post" action="{{ url_for('main.create_project') }}" class="form-grid two-col">
+        {{ csrf() }}
+        <label class="field">
+          <span class="field-label">Name</span>
+          <input class="input" name="name" required maxlength="120" placeholder="e.g. ACME external 2026-Q4">
+        </label>
+        <label class="field">
+          <span class="field-label">Description <span class="optional">optional</span></span>
+          <input class="input" name="description" maxlength="2000" placeholder="Scope, client contact, rules of engagement…">
+        </label>
+        <div class="form-actions span-2">
+          <button type="submit" class="primary-button">Create project</button>
+          <span class="field-hint">You'll be the owner and can invite teammates from the project's Settings.</span>
         </div>
-      {% endif %}
-    </div>
-  </section>
-
-  <aside class="projects-sidebar">
-    <section class="sidebar-section">
-      <h2>New Project</h2>
-      <form method="post" action="{{ url_for('main.create_project') }}" class="stack-form">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="auth-form">
-          <span>Project Name</span>
-          <input name="name" required placeholder="Project name..." maxlength="120">
-        </label>
-        <label class="auth-form">
-          <span>Description</span>
-          <textarea name="description" placeholder="Optional description..." style="min-height: 120px;"></textarea>
-        </label>
-        <button type="submit" class="primary-button" style="margin-top: 0.5rem; font-weight: 800;">Create Project</button>
       </form>
     </section>
 
-    <section class="sidebar-section" style="margin-top: auto;">
-      <form method="post" action="{{ url_for('auth.logout') }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="ghost-button" type="submit" style="width: 100%; padding: 0.75rem; border-color: var(--line); color: var(--muted);">Sign Out</button>
+    <section id="import-panel" class="card collapsible" hidden>
+      <h2>Import a project export</h2>
+      <form method="post" action="{{ url_for('main.import_project_upload') }}" enctype="multipart/form-data" class="form-grid two-col">
+        {{ csrf() }}
+        <label class="field">
+          <span class="field-label">Export file (.zip)</span>
+          <input class="input" type="file" name="file" accept=".zip" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Export password</span>
+          <input class="input" type="password" name="password" required autocomplete="off">
+        </label>
+        <label class="field">
+          <span class="field-label">Name <span class="optional">optional — defaults to the exported name</span></span>
+          <input class="input" name="name" maxlength="120">
+        </label>
+        <div class="form-actions align-end">
+          <button type="submit" class="primary-button">Import</button>
+        </div>
       </form>
     </section>
-  </aside>
-</main>
+    {% endif %}
 
-<!-- Delete Confirmation Dialog -->
-<div id="delete-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-    <div class="auth-panel" style="max-width: 440px; border: 1px solid var(--danger); box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
-        <h2 style="color: var(--danger); margin-bottom: 0.5rem;">Delete Project?</h2>
-        <p id="delete-warning" style="color: var(--muted); font-size: 0.92rem; margin-bottom: 2rem; line-height: 1.5;"></p>
-        <form id="delete-form" method="post" class="stack-form">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <label class="auth-form">
-                <span>Type the project name to confirm:</span>
-                <input id="delete-confirm-input" name="confirm_name" required autocomplete="off" placeholder="Confirm project name..." style="border-color: var(--danger); background: rgba(255, 123, 114, 0.05);">
-            </label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
-                <button type="submit" id="delete-submit-btn" disabled style="background: var(--danger); color: white; font-weight: 800;">Delete Forever</button>
-                <button type="button" onclick="hideDeleteDialog()" class="ghost-button" style="font-weight: 800;">Cancel</button>
+    <nav class="tabs" aria-label="Project filter">
+      <a class="{{ 'active' if not show_archived }}" href="{{ url_for('main.projects') }}">Active</a>
+      <a class="{{ 'active' if show_archived }}" href="{{ url_for('main.projects', archived=1) }}">Archived{% if archived_count %} <span class="count">{{ archived_count }}</span>{% endif %}</a>
+    </nav>
+
+    <div class="project-grid">
+      {% for item in projects %}
+        <article class="project-card">
+          <a class="project-card-link" href="{{ url_for('main.notes', project_id=item.id) }}">
+            <div class="project-card-top">
+              <h3>{{ item.name }}</h3>
+              {{ role_badge(roles[item.id]) }}
             </div>
-        </form>
+            <p class="project-card-desc">{{ item.description or "No description." }}</p>
+            <p class="project-card-meta">
+              {{ member_counts.get(item.id, 0) }} member{{ "" if member_counts.get(item.id, 0) == 1 else "s" }}
+              · created {{ item.created_at.strftime('%b %d, %Y') }}{% if item.created_by %} by {{ item.created_by.username }}{% endif %}
+              {% if item.archived_at %}· archived {{ item.archived_at.strftime('%b %d, %Y') }}{% endif %}
+            </p>
+          </a>
+          <div class="project-card-actions">
+            <a class="button" href="{{ url_for('main.notes', project_id=item.id) }}">Open</a>
+            {% if item.findings_enabled %}<a class="button ghost-button" href="{{ url_for('findings.list_findings', project_id=item.id) }}">Findings</a>{% endif %}
+            <a class="button ghost-button" href="{{ url_for('main.project_settings', project_id=item.id) }}">Settings</a>
+          </div>
+        </article>
+      {% else %}
+        <div class="empty-state">
+          {% if show_archived %}
+            No archived projects.
+          {% elif can_create %}
+            You're not in any projects yet. Create one, or ask a project owner to add you.
+          {% else %}
+            You're not in any projects yet. Ask a project owner or an administrator to add you.
+          {% endif %}
+        </div>
+      {% endfor %}
     </div>
-</div>
-
-<script>
-let currentProjectName = '';
-
-function showDeleteDialog(id, name) {
-    currentProjectName = name;
-    const modal = document.getElementById('delete-modal');
-    const warning = document.getElementById('delete-warning');
-    const form = document.getElementById('delete-form');
-    const input = document.getElementById('delete-confirm-input');
-    const btn = document.getElementById('delete-submit-btn');
-    
-    warning.innerText = `This will permanently delete the vault "${name}" and all its timeline events, nodes, edges, and uploaded files. This action is irreversible.`;
-    form.action = `/projects/delete/${id}`;
-    input.value = '';
-    btn.disabled = true;
-    
-    modal.style.display = 'flex';
-    input.focus();
-    
-    input.oninput = () => {
-        btn.disabled = input.value !== currentProjectName;
-    };
-}
-
-function hideDeleteDialog() {
-    document.getElementById('delete-modal').style.display = 'none';
-}
-
-// Close on escape
-window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') hideDeleteDialog();
-});
-</script>
+  </div>
+</main>
 {% endblock %}

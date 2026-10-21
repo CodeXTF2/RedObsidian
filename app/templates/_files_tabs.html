@@ -1,0 +1,10 @@
+<header class="page-header with-tabs">
+  <div>
+    <h1>Files</h1>
+    <p class="muted">{% if files_tab == "images" %}Screenshots and images pasted or dropped into notes. Click one to copy its Markdown.{% else %}Other files attached to pages and timeline events. Non-image files always download rather than open in the browser.{% endif %}</p>
+  </div>
+  <nav class="tabs" aria-label="File type">
+    <a class="{{ 'active' if files_tab == 'images' }}" href="{{ url_for('main.images', project_id=project.id) }}">Images</a>
+    <a class="{{ 'active' if files_tab == 'files' }}" href="{{ url_for('main.files_page', project_id=project.id) }}">Other files</a>
+  </nav>
+</header>

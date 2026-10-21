@@ -1,0 +1,36 @@
+{% extends "admin/base.html" %}
+{% block content %}
+<header class="page-title with-actions">
+  <div>
+    <h1>Audit log</h1>
+    <p class="muted">Sign-ins, account and settings changes, membership, exports, and changes to pages, findings and files.</p>
+  </div>
+  <div class="title-actions">
+    <a class="button ghost-button" href="{{ url_for('admin.audit_csv', **args) }}">Export CSV</a>
+  </div>
+</header>
+
+<form method="get" class="filter-bar">
+  <input class="input" name="user" value="{{ args.get('user', '') }}" placeholder="Username" aria-label="Username">
+  <select class="input select" name="action" aria-label="Action type">
+    <option value="">All actions</option>
+    {% for prefix in actions %}<option value="{{ prefix }}." {% if args.get('action') == prefix ~ '.' %}selected{% endif %}>{{ prefix }}</option>{% endfor %}
+  </select>
+  <select class="input select" name="project" aria-label="Project">
+    <option value="">All projects</option>
+    {% for id, name in project_names.items() %}<option value="{{ id }}" {% if args.get('project') == id|string %}selected{% endif %}>{{ name }}</option>{% endfor %}
+  </select>
+  <input class="input" type="date" name="since" value="{{ args.get('since', '') }}" aria-label="From date">
+  <input class="input" type="date" name="until" value="{{ args.get('until', '') }}" aria-label="To date">
+  <button type="submit">Filter</button>
+  {% if args %}<a class="button ghost-button" href="{{ url_for('admin.audit_log') }}">Clear</a>{% endif %}
+</form>
+
+{% include "_audit_table.html" %}
+
+<div class="pager">
+  {% set query = args.to_dict() %}
+  {% if page > 1 %}{% set _ = query.update({"page": page - 1}) %}<a class="button ghost-button" href="{{ url_for('admin.audit_log', **query) }}">Newer</a>{% endif %}
+  {% if has_more %}{% set _ = query.update({"page": page + 1}) %}<a class="button ghost-button" href="{{ url_for('admin.audit_log', **query) }}">Older</a>{% endif %}
+</div>
+{% endblock %}

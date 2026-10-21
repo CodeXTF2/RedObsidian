@@ -2,10 +2,7 @@
 
 {% block app_body %}
 <main class="images-layout" data-page="images">
-  <header class="page-header">
-    <h1>Image Vault</h1>
-    <p class="muted">Click an image to copy its markdown code.</p>
-  </header>
+  {% include "_files_tabs.html" %}
 
   <div id="image-gallery" class="image-gallery">
     <div class="loading">Loading images...</div>

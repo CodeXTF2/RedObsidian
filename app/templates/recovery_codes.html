@@ -1,0 +1,18 @@
+{% extends "account_base.html" %}
+{% block title %}Recovery codes · RedObsidian{% endblock %}
+{% block crumb %}<span>/</span><span>Recovery codes</span>{% endblock %}
+{% block content %}
+<header class="page-title">
+  <h1>Save your recovery codes</h1>
+  <p class="muted">Each code works once, in place of an authenticator code, if you lose your device. They won't be shown again.</p>
+</header>
+<section class="card">
+  <ul class="code-list">
+    {% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}
+  </ul>
+  <div class="form-actions">
+    <button type="button" class="ghost-button" data-copy="{{ codes|join('\n') }}">Copy codes</button>
+    <a class="button primary-button" href="{{ url_for('main.index') }}">I've saved them, continue</a>
+  </div>
+</section>
+{% endblock %}

@@ -1,251 +1,152 @@
-import sys
-import json
+"""Project management from the command line. Export/import is also available in each project's Settings.
+
+Export passwords are prompted for (or read from REDOBSIDIAN_EXPORT_PASSWORD), never taken as arguments.
+"""
 import argparse
+import getpass
 import os
-import shutil
-import pyzipper
-from app import create_app, db
-from app.main import parse_iso_datetime
-from app.models import Project, TimelineEvent, GraphNode, GraphEdge, User
+import sys
 
-def export_project(project_name, output_file, password):
-    app = create_app()
-    with app.app_context():
-        project = Project.query.filter_by(name=project_name).first()
-        if not project:
-            print(f"Error: Project '{project_name}' not found.")
-            return False
-        
-        # Soft-deleted pages (and links to them) are not exported
-        nodes = GraphNode.query.filter_by(project_id=project.id, deleted_at=None).all()
-        live_ids = {n.id for n in nodes}
-        data = {
-            "project": project.to_dict(),
-            "timeline_events": [e.to_dict() for e in TimelineEvent.query.filter_by(project_id=project.id).all()],
-            "graph_nodes": [n.to_dict() for n in nodes],
-            "graph_edges": [
-                e.to_dict() for e in GraphEdge.query.filter_by(project_id=project.id).all()
-                if e.source_id in live_ids and e.target_id in live_ids
-            ],
-        }
-        
-        # We'll use a ZIP file to bundle JSON and uploads
-        try:
-            with pyzipper.AESZipFile(output_file, 'w', compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as zf:
-                zf.setpassword(password.encode('utf-8'))
-                
-                # Write project metadata
-                zf.writestr('project.json', json.dumps(data, indent=4))
-                
-                # Write uploaded files
-                upload_dir = os.path.join(app.instance_path, "uploads", str(project.id))
-                if os.path.exists(upload_dir):
-                    for root, dirs, files in os.walk(upload_dir):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            arcname = os.path.join('uploads', os.path.relpath(file_path, upload_dir))
-                            zf.write(file_path, arcname)
-            
-            print(f"Project '{project_name}' exported securely to {output_file}")
-            return True
-        except Exception as e:
-            print(f"Error during export: {str(e)}")
-            return False
+from app import audit, create_app, db
+from app.maintenance import delete_project_data
+from app.models import PROJECT_ROLES, Project, ProjectMember, User
 
-def import_project(input_file, password, new_name=None):
-    app = create_app()
-    with app.app_context():
-        if not os.path.exists(input_file):
-            print(f"Error: File '{input_file}' not found.")
-            return False
-        
-        try:
-            with pyzipper.AESZipFile(input_file, 'r') as zf:
-                zf.setpassword(password.encode('utf-8'))
-                
-                # Test the password by reading project.json
-                try:
-                    with zf.open('project.json') as f:
-                        data = json.load(f)
-                except (RuntimeError, pyzipper.zipfile.BadZipFile):
-                    print("Error: Invalid password or corrupted file.")
-                    return False
-                
-                proj_data = data["project"]
-                name = new_name if new_name else proj_data["name"]
-                
-                if Project.query.filter_by(name=name).first():
-                    print(f"Error: Project '{name}' already exists.")
-                    return False
-                
-                owner = User.query.first()
-                if not owner:
-                    print("Error: No users found. Create a user first using manage_users.py.")
-                    return False
-                
-                project = Project(name=name, description=proj_data.get("description"), created_by_id=owner.id)
-                db.session.add(project)
-                db.session.commit()
-                
-                # Map old IDs to new IDs for nodes
-                node_id_map = {}
-                
-                # Import Nodes (first pass)
-                for n_data in data["graph_nodes"]:
-                    old_id = n_data["id"]
-                    node = GraphNode(
-                        project_id=project.id,
-                        title=n_data["title"],
-                        caption=n_data["caption"],
-                        notes=n_data["notes"],
-                        files_json=json.dumps(n_data["files"]),
-                        order_index=n_data["order_index"],
-                        color=n_data["color"],
-                        in_graph=n_data["in_graph"],
-                        x=n_data["x"],
-                        y=n_data["y"],
-                        user_id=owner.id
-                    )
-                    db.session.add(node)
-                    db.session.flush()
-                    node_id_map[old_id] = node.id
-                    
-                # Import Nodes (second pass for parent_id)
-                for n_data in data["graph_nodes"]:
-                    if n_data.get("parent_id"):
-                        new_id = node_id_map[n_data["id"]]
-                        new_parent_id = node_id_map.get(n_data["parent_id"])
-                        if new_parent_id:
-                            node = db.session.get(GraphNode, new_id)
-                            node.parent_id = new_parent_id
 
-                # Import Timeline Events
-                for e_data in data["timeline_events"]:
-                    event = TimelineEvent(
-                        project_id=project.id,
-                        title=e_data["title"],
-                        body=e_data["body"],
-                        files_json=json.dumps(e_data["files"]),
-                        occurred_at=parse_iso_datetime(e_data["occurred_at"]),
-                        ended_at=parse_iso_datetime(e_data["ended_at"]) if e_data.get("ended_at") else None,
-                        order_index=e_data["order_index"],
-                        manual_order=e_data["manual_order"],
-                        user_id=owner.id
-                    )
-                    db.session.add(event)
-                    
-                # Import Edges
-                for e_data in data["graph_edges"]:
-                    new_source_id = node_id_map.get(e_data["source_id"])
-                    new_target_id = node_id_map.get(e_data["target_id"])
-                    if new_source_id and new_target_id:
-                        edge = GraphEdge(
-                            project_id=project.id,
-                            source_id=new_source_id,
-                            target_id=new_target_id,
-                            joint_x=e_data.get("joint_x"),
-                            joint_y=e_data.get("joint_y"),
-                            user_id=owner.id
-                        )
-                        db.session.add(edge)
+def export_password(confirm):
+    password = os.environ.get("REDOBSIDIAN_EXPORT_PASSWORD")
+    if password:
+        return password
+    password = getpass.getpass("Export password: ")
+    if confirm and password != getpass.getpass("Repeat password: "):
+        sys.exit("Error: passwords don't match.")
+    return password
 
-                # Extract uploads
-                new_upload_dir = os.path.join(app.instance_path, "uploads", str(project.id))
-                os.makedirs(new_upload_dir, exist_ok=True)
-                
-                for member in zf.namelist():
-                    if member.startswith('uploads/'):
-                        # Strip 'uploads/' prefix
-                        filename = os.path.relpath(member, 'uploads/')
-                        if filename == '.': continue # skip the folder itself
-                        
-                        source = zf.open(member)
-                        target_path = os.path.join(new_upload_dir, filename)
-                        os.makedirs(os.path.dirname(target_path), exist_ok=True)
-                        
-                        with source, open(target_path, "wb") as target:
-                            shutil.copyfileobj(source, target)
 
-                db.session.commit()
-                print(f"Project '{name}' imported successfully from secure archive.")
-                return True
-        except Exception as e:
-            print(f"Error during import: {str(e)}")
-            return False
+def find_project(name):
+    matches = Project.query.filter_by(name=name).all()
+    if not matches and name.isdigit():
+        project = db.session.get(Project, int(name))
+        matches = [project] if project else []
+    if not matches:
+        sys.exit(f"Error: project '{name}' not found.")
+    if len(matches) > 1:
+        sys.exit(f"Error: several projects are named '{name}'; use the project ID instead: "
+                 + ", ".join(str(p.id) for p in matches))
+    return matches[0]
 
-def list_projects():
-    app = create_app()
-    with app.app_context():
-        projects = Project.query.all()
-        for p in projects:
-            print(f"- {p.name} (ID: {p.id}, created by: {p.created_by.username})")
 
-def delete_project(project_name):
-    app = create_app()
-    with app.app_context():
-        project = Project.query.filter_by(name=project_name).first()
-        if not project:
-            print(f"Error: Project '{project_name}' not found.")
-            return False
-        
-        confirm = input(f"Are you sure you want to delete project '{project_name}'? This will delete ALL associated data and files. \nType the project name to confirm: ")
-        if confirm != project_name:
-            print("Confirmation failed. Deletion cancelled.")
-            return False
-            
-        # Delete associated data
-        TimelineEvent.query.filter_by(project_id=project.id).delete()
-        
-        nodes = GraphNode.query.filter_by(project_id=project.id).all()
-        for node in nodes:
-            for child in node.children:
-                child.parent_id = None
-        
-        GraphEdge.query.filter_by(project_id=project.id).delete()
-        GraphNode.query.filter_by(project_id=project.id).delete()
-        
-        db.session.delete(project)
-        db.session.commit()
-        
-        project_upload_dir = os.path.join(app.instance_path, "uploads", str(project.id))
-        if os.path.exists(project_upload_dir):
-            shutil.rmtree(project_upload_dir)
-            
-        print(f"Project '{project_name}' deleted successfully.")
-        return True
+def find_user(username):
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        sys.exit(f"Error: user '{username}' not found.")
+    return user
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Manage RedTeam-Obsidian projects.")
+
+def cmd_list(args):
+    for project in Project.query.order_by(Project.created_at).all():
+        owners = ", ".join(m.user.username for m in project.members if m.role == "owner")
+        status = " [archived]" if project.archived_at else ""
+        print(f"- {project.name}{status} (ID: {project.id}, owners: {owners or '-'}, members: {len(project.members)})")
+
+
+def cmd_export(args):
+    from app.transfer import TransferError, export_project
+
+    project = find_project(args.name)
+    try:
+        export_project(project, args.file, export_password(confirm=True))
+    except TransferError as exc:
+        sys.exit(f"Error: {exc}")
+    audit.record("project.exported", user=None, username="cli", project_id=project.id, target_type="project",
+                 target_id=project.id)
+    print(f"Project '{project.name}' exported to {args.file}")
+
+
+def cmd_import(args):
+    from app.transfer import TransferError, import_project
+
+    owner = find_user(args.owner) if args.owner else User.query.filter_by(is_admin=True).order_by(User.id).first()
+    if not owner:
+        sys.exit("Error: no owner. Pass --owner <username> or create an administrator first.")
+    if not os.path.isfile(args.file):
+        sys.exit(f"Error: file '{args.file}' not found.")
+    try:
+        project = import_project(args.file, export_password(confirm=False), owner, args.name)
+    except TransferError as exc:
+        sys.exit(f"Error: {exc}")
+    audit.record("project.imported", user=None, username="cli", project_id=project.id, target_type="project",
+                 target_id=project.id, name=project.name, owner=owner.username)
+    print(f"Imported '{project.name}' (ID {project.id}), owned by {owner.username}.")
+
+
+def cmd_delete(args):
+    project = find_project(args.name)
+    confirm = input(f"Delete project '{project.name}' and ALL its data and files? Type the project name to confirm: ")
+    if confirm != project.name:
+        sys.exit("Confirmation failed. Nothing was deleted.")
+    name, project_id = project.name, project.id
+    delete_project_data(project)
+    audit.record("project.deleted", user=None, username="cli", project_id=project_id, target_type="project",
+                 target_id=project_id, name=name)
+    print(f"Project '{name}' deleted.")
+
+
+def cmd_member(args):
+    project = find_project(args.name)
+    user = find_user(args.username)
+    member = ProjectMember.query.filter_by(project_id=project.id, user_id=user.id).first()
+    if args.role == "remove":
+        if member:
+            db.session.delete(member)
+        audit.record("member.removed", user=None, username="cli", project_id=project.id, target_type="user",
+                     target_id=user.id, member=user.username)
+        print(f"Removed {user.username} from '{project.name}'.")
+        return
+    if member:
+        member.role = args.role
+    else:
+        db.session.add(ProjectMember(project_id=project.id, user_id=user.id, role=args.role))
+    audit.record("member.added", user=None, username="cli", project_id=project.id, target_type="user",
+                 target_id=user.id, member=user.username, role=args.role)
+    print(f"{user.username} is now {args.role} of '{project.name}'.")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Manage RedObsidian projects.")
     subparsers = parser.add_subparsers(dest="command")
 
-    # Export
-    export_parser = subparsers.add_parser("export", help="Export a project to a password-protected ZIP")
-    export_parser.add_argument("name", help="Name of the project to export")
-    export_parser.add_argument("file", help="Output ZIP file path")
-    export_parser.add_argument("--password", required=True, help="Password for encryption")
+    subparsers.add_parser("list", help="List all projects").set_defaults(func=cmd_list)
 
-    # Import
-    import_parser = subparsers.add_parser("import", help="Import a project from a password-protected ZIP")
-    import_parser.add_argument("file", help="Input ZIP file path")
-    import_parser.add_argument("--password", required=True, help="Password for decryption")
-    import_parser.add_argument("--name", help="New name for the imported project")
+    export = subparsers.add_parser("export", help="Export a project to an AES-encrypted ZIP (prompts for a password)")
+    export.add_argument("name", help="Project name or ID")
+    export.add_argument("file", help="Output ZIP path")
+    export.set_defaults(func=cmd_export)
 
-    # List
-    subparsers.add_parser("list", help="List all projects")
+    imp = subparsers.add_parser("import", help="Import a project export (prompts for the password)")
+    imp.add_argument("file", help="Input ZIP path")
+    imp.add_argument("--name", help="Name for the imported project")
+    imp.add_argument("--owner", help="Username that will own it (default: first administrator)")
+    imp.set_defaults(func=cmd_import)
 
-    # Delete
-    delete_parser = subparsers.add_parser("delete", help="Delete a project")
-    delete_parser.add_argument("name", help="Name of the project to delete")
+    delete = subparsers.add_parser("delete", help="Delete a project and its files")
+    delete.add_argument("name", help="Project name or ID")
+    delete.set_defaults(func=cmd_delete)
+
+    member = subparsers.add_parser("member", help="Add, change or remove a project member")
+    member.add_argument("name", help="Project name or ID")
+    member.add_argument("username")
+    member.add_argument("role", choices=[*PROJECT_ROLES, "remove"])
+    member.set_defaults(func=cmd_member)
 
     args = parser.parse_args()
-
-    if args.command == "export":
-        export_project(args.name, args.file, args.password)
-    elif args.command == "import":
-        import_project(args.file, args.password, args.name)
-    elif args.command == "list":
-        list_projects()
-    elif args.command == "delete":
-        delete_project(args.name)
-    else:
+    if not getattr(args, "func", None):
         parser.print_help()
+        return
+    app = create_app()
+    with app.app_context():
+        args.func(args)
+        db.session.commit()
+
+
+if __name__ == "__main__":
+    main()

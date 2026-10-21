@@ -1,0 +1,11 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes %}
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container narrow">
+    <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{{ url_for('main.index') }}">Home</a><span>/</span><a href="{{ url_for('auth.account') }}">Account</a>{% block crumb %}{% endblock %}</nav>
+    {{ flashes() }}
+    {% block content %}{% endblock %}
+  </div>
+</main>
+{% endblock %}

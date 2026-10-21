@@ -1,0 +1,22 @@
+{% extends "app_base.html" %}
+{% from "_macros.html" import flashes %}
+{% set active_page = "admin" %}
+{% block title %}Administration · RedObsidian{% endblock %}
+
+{% block app_body %}
+<main class="page-shell">
+  <div class="page-container wide admin-layout">
+    <nav class="side-nav" aria-label="Administration">
+      <p class="side-nav-heading">Administration</p>
+      <a class="{{ 'active' if admin_page == 'users' }}" href="{{ url_for('admin.users') }}">Users</a>
+      <a class="{{ 'active' if admin_page == 'projects' }}" href="{{ url_for('admin.projects') }}">Projects</a>
+      <a class="{{ 'active' if admin_page == 'settings' }}" href="{{ url_for('admin.settings') }}">Security &amp; settings</a>
+      <a class="{{ 'active' if admin_page == 'audit' }}" href="{{ url_for('admin.audit_log') }}">Audit log</a>
+    </nav>
+    <div class="admin-content">
+      {{ flashes() }}
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</main>
+{% endblock %}

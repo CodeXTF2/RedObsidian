@@ -1,0 +1,26 @@
+{% extends "account_base.html" %}
+{% block title %}Set up two-factor authentication · RedObsidian{% endblock %}
+{% block crumb %}<span>/</span><span>Two-factor authentication</span>{% endblock %}
+{% block content %}
+<header class="page-title">
+  <h1>Set up two-factor authentication</h1>
+  {% if required and not current_user.totp_enabled %}<p class="notice">Your administrator requires two-factor authentication. Finish setting it up to continue.</p>{% endif %}
+</header>
+<section class="card">
+  <div class="totp-setup">
+    <div class="qr" role="img" aria-label="QR code for your authenticator app">{{ qr_svg|safe }}</div>
+    <div class="form-grid">
+      <ol class="steps">
+        <li>Open your authenticator app and scan the QR code.</li>
+        <li>Can't scan it? Enter this key manually:<br><code class="secret">{{ secret }}</code></li>
+        <li>Type the 6-digit code the app shows.</li>
+      </ol>
+      <form method="post" action="{{ url_for('auth.totp_confirm') }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input class="input" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required autofocus>
+        <button type="submit" class="primary-button">Verify &amp; turn on</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

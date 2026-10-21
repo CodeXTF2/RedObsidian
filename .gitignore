@@ -11,8 +11,11 @@ env/
 .env
 .flaskenv
 
-# Database / Instance
+# Database / Instance / backups (contain client data)
 instance/
+backups/
+*.partial
+*.zip
 *.sqlite
 *.sqlite3
 

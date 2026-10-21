@@ -1,0 +1,114 @@
+{% extends "admin/base.html" %}
+{% from "_macros.html" import csrf, role_badge %}
+{% block content %}
+<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{{ url_for('admin.users') }}">Users</a><span>/</span><span>{{ user.username }}</span></nav>
+<header class="page-title">
+  <h1>{{ user.username }}
+    {% if user.is_admin %}<span class="badge role-owner">Admin</span>{% endif %}
+    {% if user.disabled %}<span class="badge danger">Disabled</span>{% endif %}
+  </h1>
+  <p class="muted">
+    Created {{ user.created_at.strftime('%Y-%m-%d') }}
+    · last sign-in {{ user.last_login_at.strftime('%Y-%m-%d %H:%M') ~ " UTC" if user.last_login_at else "never" }}
+    · 2FA {{ "on" if user.totp_enabled else "off" }}
+    {% if user.sso_subject %}· linked to SSO{% endif %}
+    {% if not user.has_password %}· no password (SSO only){% endif %}
+  </p>
+</header>
+
+<section class="card">
+  <h2>Account actions</h2>
+  <div class="action-grid">
+    {% macro action(name, label, hint, style="", confirm="") %}
+      <form method="post" action="{{ url_for('admin.user_action', user_id=user.id) }}" class="action-row" {% if confirm %}data-confirm="{{ confirm }}"{% endif %}>
+        {{ csrf() }}
+        <input type="hidden" name="action" value="{{ name }}">
+        <div><strong>{{ label }}</strong><span class="field-hint">{{ hint }}</span></div>
+        <button type="submit" class="{{ style or 'ghost-button' }}">{{ label }}</button>
+      </form>
+    {% endmacro %}
+    {{ action("reset_password", "Reset password", "Generates a temporary password they must change at next sign-in.", confirm="Generate a new temporary password for " ~ user.username ~ "?") }}
+    {{ action("force_password_change", "Require password change", "They choose a new password at next page load.") }}
+    {% if user.totp_enabled %}{{ action("reset_2fa", "Reset 2FA", "For a lost device. They can enrol again from their account.", confirm="Turn off two-factor authentication for " ~ user.username ~ "?") }}{% endif %}
+    {{ action("revoke_sessions", "Sign out everywhere", "Ends all of their current sessions.") }}
+    {% if user.is_admin %}
+      {{ action("demote", "Remove admin", "They keep their project memberships.", confirm="Remove administrator rights from " ~ user.username ~ "?") }}
+    {% else %}
+      {{ action("promote", "Make admin", "Admins manage users and settings and can open every project.", confirm="Make " ~ user.username ~ " an administrator?") }}
+    {% endif %}
+    {% if user.disabled %}
+      {{ action("enable", "Enable account", "Lets them sign in again.") }}
+    {% else %}
+      {{ action("disable", "Disable account", "Blocks sign-in and ends their sessions; their work stays.", "ghost-button danger", "Disable " ~ user.username ~ "?") }}
+    {% endif %}
+  </div>
+</section>
+
+<section class="card">
+  <h2>Project access</h2>
+  <table class="table">
+    <thead><tr><th>Project</th><th>Role</th><th class="actions-col"></th></tr></thead>
+    <tbody>
+    {% for member in memberships %}
+      <tr>
+        <td><a href="{{ url_for('main.project_settings', project_id=member.project_id) }}">{{ member.project.name }}</a>{% if member.project.archived_at %} <span class="badge">Archived</span>{% endif %}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin.user_membership', user_id=user.id) }}" class="inline-form">
+            {{ csrf() }}
+            <input type="hidden" name="project_id" value="{{ member.project_id }}">
+            <select class="input select" name="role" data-autosubmit aria-label="Role in {{ member.project.name }}">
+              {% for role in roles %}<option value="{{ role }}" {% if role == member.role %}selected{% endif %}>{{ role|capitalize }}</option>{% endfor %}
+            </select>
+          </form>
+        </td>
+        <td class="actions-col">
+          <form method="post" action="{{ url_for('admin.user_membership', user_id=user.id) }}" data-confirm="Remove {{ user.username }} from {{ member.project.name }}?">
+            {{ csrf() }}
+            <input type="hidden" name="project_id" value="{{ member.project_id }}">
+            <input type="hidden" name="role" value="remove">
+            <button type="submit" class="ghost-button danger small">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="empty-row">Not a member of any project.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if other_projects %}
+  <form method="post" action="{{ url_for('admin.user_membership', user_id=user.id) }}" class="inline-form add-member">
+    {{ csrf() }}
+    <select class="input select" name="project_id" required aria-label="Project">
+      <option value="">Add to project…</option>
+      {% for item in other_projects %}<option value="{{ item.id }}">{{ item.name }}{% if item.archived_at %} (archived){% endif %}</option>{% endfor %}
+    </select>
+    <select class="input select" name="role" aria-label="Role">
+      {% for role in roles %}<option value="{{ role }}" {% if role == 'editor' %}selected{% endif %}>{{ role|capitalize }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="primary-button">Add</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-header">
+    <h2>Recent activity</h2>
+    <a class="button ghost-button" href="{{ url_for('admin.audit_log', user=user.username) }}">Full log</a>
+  </div>
+  {% set entries = recent %}
+  {% include "_audit_table.html" %}
+</section>
+
+<section class="card danger-zone">
+  <div class="card-header">
+    <div>
+      <h2>Delete account</h2>
+      <p class="muted">Only possible for accounts that haven't written any project content. Otherwise disable the account so the history stays attributable.</p>
+    </div>
+    <form method="post" action="{{ url_for('admin.delete_user', user_id=user.id) }}" data-confirm="Permanently delete {{ user.username }}?">
+      {{ csrf() }}
+      <button type="submit" class="danger-button">Delete</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

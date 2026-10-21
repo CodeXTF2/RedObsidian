@@ -1,0 +1,96 @@
+{% from "_macros.html" import severity_badge, status_badge %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ settings.title or (project.name ~ " — Security Assessment Report") }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/report.css') }}">
+  <script src="{{ url_for('static', filename='js/ui.js') }}" defer></script>
+</head>
+<body class="report-doc">
+  <div class="print-bar no-print">
+    <a href="{{ url_for('findings.report', project_id=project.id) }}">← Back to report settings</a>
+    <button type="button" data-print>Print / Save as PDF</button>
+  </div>
+
+  <section class="cover">
+    {% if settings.classification %}<p class="classification">{{ settings.classification }}</p>{% endif %}
+    <h1>{{ settings.title or (project.name ~ " — Security Assessment Report") }}</h1>
+    <dl class="cover-meta">
+      {% for label, key in [("Client", "client"), ("Assessment", "assessment_type"), ("Version", "version"), ("Prepared by", "prepared_by")] %}
+        {% if settings[key] %}<dt>{{ label }}</dt><dd>{{ settings[key] }}</dd>{% endif %}
+      {% endfor %}
+      {% if settings.start_date or settings.end_date %}<dt>Testing window</dt><dd>{{ settings.start_date or "?" }} to {{ settings.end_date or "?" }}</dd>{% endif %}
+      <dt>Generated</dt><dd>{{ generated_at.strftime('%Y-%m-%d %H:%M') }} UTC by {{ generated_by }}</dd>
+    </dl>
+  </section>
+
+  {% for heading, key in [("Executive summary", "executive_summary"), ("Scope", "scope"), ("Methodology", "methodology")] %}
+    {% if settings[key] %}<section class="chapter"><h2>{{ heading }}</h2>{{ markdown_html(settings[key]) }}</section>{% endif %}
+  {% endfor %}
+
+  {% if findings_enabled %}
+  <section class="chapter">
+    <h2>Findings summary</h2>
+    <div class="sev-summary">
+      {% for level in severities_all %}<div class="sev-box sev-{{ level }}"><strong>{{ counts[level] }}</strong><span>{{ level|capitalize }}</span></div>{% endfor %}
+    </div>
+    {% if numbered %}
+    <table>
+      <thead><tr><th>ID</th><th>Finding</th><th>Severity</th><th>CVSS</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for ref, finding in numbered %}
+        <tr><td>{{ ref }}</td><td><a href="#{{ ref }}">{{ finding.title }}</a></td><td>{{ severity_badge(finding.severity) }}</td>
+            <td>{{ "%.1f"|format(finding.cvss_score) if finding.cvss_score is not none else "—" }}</td><td>{{ status_label(finding.status) }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p>No findings were recorded.</p>{% endif %}
+  </section>
+
+  {% if numbered %}
+  <section class="chapter">
+    <h2>Detailed findings</h2>
+    {% for ref, finding in numbered %}
+      <article class="finding" id="{{ ref }}">
+        <h3>{{ ref }}: {{ finding.title }}</h3>
+        <table class="meta">
+          <tr><th>Severity</th><td>{{ severity_badge(finding.severity) }}</td></tr>
+          <tr><th>CVSS 3.1</th><td>{{ "%.1f"|format(finding.cvss_score) if finding.cvss_score is not none else "—" }}{% if finding.cvss_vector %} <code>{{ finding.cvss_vector }}</code>{% endif %}</td></tr>
+          <tr><th>Status</th><td>{{ status_label(finding.status) }}</td></tr>
+          {% if finding.affected_assets %}<tr><th>Affected assets</th><td class="pre">{{ finding.affected_assets }}</td></tr>{% endif %}
+        </table>
+        {% for label, key in [("Description", "description"), ("Impact", "impact"), ("Remediation", "remediation"), ("References", "references")] %}
+          {% if finding[key] %}<h4>{{ label }}</h4>{{ markdown_html(finding[key]) }}{% endif %}
+        {% endfor %}
+        {% set evidence = [] %}
+        {% for node_id in finding.evidence_node_ids %}{% if node_id in pages %}{% set _ = evidence.append(pages[node_id]) %}{% endif %}{% endfor %}
+        {% if evidence %}
+          <h4>Evidence</h4>
+          {% for page in evidence %}
+            <div class="evidence"><h5>{{ page.title }}</h5>{{ markdown_html(page.notes or "") }}</div>
+          {% endfor %}
+        {% endif %}
+      </article>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% endif %}
+
+  {% if settings.conclusion %}<section class="chapter"><h2>Conclusion</h2>{{ markdown_html(settings.conclusion) }}</section>{% endif %}
+
+  {% if events %}
+  <section class="chapter">
+    <h2>Appendix: activity timeline</h2>
+    <table>
+      <thead><tr><th>Time (UTC)</th><th>Activity</th><th>Details</th></tr></thead>
+      <tbody>
+        {% for event in events %}<tr><td class="nowrap">{{ event.occurred_at.strftime('%Y-%m-%d %H:%M') }}</td><td>{{ event.title }}</td><td class="pre">{{ event.body or "" }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+</body>
+</html>

@@ -2,10 +2,7 @@
 
 {% block app_body %}
 <main class="images-layout" data-page="files">
-  <header class="page-header">
-    <h1>File Vault</h1>
-    <p class="muted">List of all non-image files uploaded to the vault.</p>
-  </header>
+  {% include "_files_tabs.html" %}
 
   <div id="file-list" class="image-gallery">
     <div class="loading">Loading files...</div>

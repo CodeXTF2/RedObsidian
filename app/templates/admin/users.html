@@ -1,0 +1,57 @@
+{% extends "admin/base.html" %}
+{% from "_macros.html" import csrf %}
+{% block content %}
+<header class="page-title with-actions">
+  <div>
+    <h1>Users</h1>
+    <p class="muted">{{ users|length }} account{{ "" if users|length == 1 else "s" }}. Add people here, then give them access from a project's Settings or from their user page.</p>
+  </div>
+  <div class="title-actions"><button type="button" class="primary-button" data-toggle="#create-user">New user</button></div>
+</header>
+
+<section id="create-user" class="card collapsible" hidden>
+  <h2>New user</h2>
+  <form method="post" action="{{ url_for('admin.create_user') }}" class="form-grid two-col">
+    {{ csrf() }}
+    <label class="field">
+      <span class="field-label">Username</span>
+      <input class="input" name="username" required maxlength="64" autocomplete="off" pattern="\S+" title="No spaces">
+    </label>
+    <label class="field">
+      <span class="field-label">Password <span class="optional">leave empty to generate one</span></span>
+      <input class="input" name="password" type="password" autocomplete="new-password">
+      {% if policy %}<span class="field-hint">{{ policy }}</span>{% endif %}
+    </label>
+    <div class="span-2 check-inline">
+      <label><input type="checkbox" name="must_change" checked> Must change password at first sign-in</label>
+      <label><input type="checkbox" name="is_admin"> Administrator</label>
+    </div>
+    <div class="form-actions span-2"><button type="submit" class="primary-button">Create user</button></div>
+  </form>
+</section>
+
+<div class="table-wrap">
+<table class="table">
+  <thead><tr><th>User</th><th>Status</th><th>2FA</th><th>Projects</th><th>Last sign-in</th></tr></thead>
+  <tbody>
+  {% for user in users %}
+    <tr class="row-link">
+      <td>
+        <a href="{{ url_for('admin.user_detail', user_id=user.id) }}"><strong>{{ user.username }}</strong></a>
+        {% if user.is_admin %}<span class="badge role-owner">Admin</span>{% endif %}
+        {% if user.sso_subject %}<span class="badge">SSO</span>{% endif %}
+      </td>
+      <td>
+        {% if user.disabled %}<span class="badge danger">Disabled</span>
+        {% elif user.must_change_password %}<span class="badge warn">Must change password</span>
+        {% else %}<span class="badge ok">Active</span>{% endif %}
+      </td>
+      <td>{% if user.totp_enabled %}<span class="badge ok">On</span>{% elif settings.totp_required %}<span class="badge warn">Pending</span>{% else %}<span class="muted">Off</span>{% endif %}</td>
+      <td>{{ memberships.get(user.id, 0) }}</td>
+      <td class="nowrap muted">{{ user.last_login_at.strftime('%Y-%m-%d %H:%M') if user.last_login_at else "Never" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

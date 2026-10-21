@@ -1,0 +1,37 @@
+{% macro flashes(extra_class="") %}
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-stack {{ extra_class }}">
+        {% for category, message in messages %}
+          <p class="flash {{ category }}" role="{{ 'alert' if category == 'error' else 'status' }}">{{ message }}</p>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+{% endmacro %}
+
+{% macro role_badge(role) %}
+  {% if role %}<span class="badge role-{{ role }}">{{ role|capitalize }}</span>{% endif %}
+{% endmacro %}
+
+{% macro severity_badge(severity) %}
+  <span class="badge sev sev-{{ severity }}">{{ severity|capitalize }}</span>
+{% endmacro %}
+
+{% macro status_badge(status) %}
+  <span class="badge status status-{{ status }}">{{ status_label(status) }}</span>
+{% endmacro %}
+
+{% macro switch(name, checked, label, hint="") %}
+  <label class="switch-row">
+    <span class="switch-text">
+      <span class="switch-label">{{ label }}</span>
+      {% if hint %}<span class="field-hint">{{ hint }}</span>{% endif %}
+    </span>
+    <input type="checkbox" name="{{ name }}" class="switch" {% if checked %}checked{% endif %}>
+  </label>
+{% endmacro %}
+
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro time(value) %}{% if value %}<time datetime="{{ value.isoformat() }}" data-local-time>{{ value.strftime('%Y-%m-%d %H:%M') }} UTC</time>{% else %}—{% endif %}{% endmacro %}
